@@ -24,10 +24,10 @@ from IPython import embed as shell # for debugging
 # -----------------------
 # Levels
 # ----------------------- 
-training        = False  # process the logfiles and average the performance on the odd-ball training task
+training        = True  # process the logfiles and average the performance on the odd-ball training task
 pre_process     = False  # pupil preprocessing is done on entire time series during the 2AFC decision task
 trial_process   = False  # cut out events for each trial and calculate trial-wise baselines, baseline correct evoked responses (2AFC decision)
-higher_level    = True   # all subjects' dataframe, pupil and behavior higher level analyses & figures (2AFC decision)
+higher_level    = False   # all subjects' dataframe, pupil and behavior higher level analyses & figures (2AFC decision)
  
 # -----------------------
 # Paths
@@ -133,7 +133,8 @@ if higher_level:
         time_locked             = time_locked,
         pupil_step_lim          = pupil_step_lim,                
         baseline_window         = baseline_window,              
-        pupil_time_of_interest  = [[[0.75,1.25],[2.5,3.0]]] # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
+        pupil_time_of_interest  = [[[0.75,1.25],[2.5,3.0]]], # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
+        freq_cond               = 'frequency'   # determines how to group the conditions based on actual frequencies
         )
     # higherLevel.higherlevel_get_phasics()       # computes phasic pupil for each subject (adds to log files)
     # higherLevel.create_subjects_dataframe(blocks=break_trials+[240])  # concantenates all subjects, flags missed trials, saves higher level data frame
@@ -142,10 +143,16 @@ if higher_level:
     # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
     # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
     # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
+    # higherLevel.plot_uncertainty_rt()          # plots the interaction between frequency and accuracy in RT
+    higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
     
     ''' Evoked pupil response
     '''
     # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
-
+    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    
+    # higherLevel.correlation_frequency_AQ()
+    # higherLevel.correlation_accuracy_AQ()
+    
+    # higherLevel.correlation_interaction_AQ()
     

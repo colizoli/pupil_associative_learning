@@ -51,7 +51,7 @@ sns.plotting_context()
 ############################################
 
 class higherLevel(object):
-    def __init__(self, subjects, experiment_name, project_directory, sample_rate, time_locked, pupil_step_lim, baseline_window, pupil_time_of_interest):        
+    def __init__(self, subjects, experiment_name, project_directory, sample_rate, time_locked, pupil_step_lim, baseline_window, pupil_time_of_interest, freq_cond):        
         self.subjects           = subjects
         self.exp                = experiment_name
         self.project_directory  = project_directory
@@ -59,6 +59,8 @@ class higherLevel(object):
         self.dataframe_folder   = os.path.join(project_directory, 'data_frames')
         self.trial_bin_folder   = os.path.join(self.dataframe_folder,'trial_bins_pupil') # for average pupil in different trial bin windows
         self.jasp_folder        = os.path.join(self.dataframe_folder,'jasp') # for dataframes to input into JASP
+        
+        self.freq_cond          = freq_cond # determines how to group the conditions based on actual frequencies
         
         if not os.path.isdir(self.figure_folder):
             os.mkdir(self.figure_folder)
@@ -198,6 +200,7 @@ class higherLevel(object):
         # concatenates all subjects into a single dataframe
         # flags missing trials from concantenated dataframe
         # counts missing trials and outliers
+        # merge with actual frequencies
         
         # output all subjects' data
         DF = pd.DataFrame()
@@ -229,16 +232,31 @@ class higherLevel(object):
         ### print how many outliers
         print('Missing = {}%'.format(np.true_divide(np.sum(DF['missing']),DF.shape[0])*100))
         print('Dropped trials = {}%'.format(np.true_divide(np.sum(DF['drop_trial']),DF.shape[0])*100))
+        shell()
+        #####################
+        # merges the actual_frequencies and bins calculated from the oddball task logfiles into subjects' dataframe
+        FREQ = pd.read_csv(os.path.join(self.dataframe_folder,'{}_actual_frequencies.csv'.format('task-letter_color_visual_training')))
+        FREQ = FREQ.drop(['frequency'],axis=1) # otherwise get double
+        FREQ = FREQ.loc[:, ~FREQ.columns.str.contains('^Unnamed')] # drop all unnamed columns
+        # inner merge on subject, letter, and color (r)
+        M = DF.merge(FREQ,how='inner',on=['subject','letter','r'])
         
+        # actual frequencies average:
+        AF = M.groupby(['frequency','match'])['actual_frequency'].mean()
+        AF.to_csv(os.path.join(self.dataframe_folder,'{}_actual_frequencies_mean.csv'.format(self.exp)))
+        
+        print('actual frequencies per matching condition')
+        print(AF) 
         #####################
         # save whole dataframe with all subjects
         DF.to_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         #####################
         print('success: higherlevel_dataframe')
         
-    def average_conditions(self):
+    def average_conditions(self, ):
         # averages the phasic pupil per subject PER CONDITION 
         # saves separate dataframes for the different combinations of factors
+        # self.freq_cond argument determines how the trials were split on the basis of actual_frequencies
                 
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
@@ -256,30 +274,42 @@ class higherLevel(object):
             ######## CORRECT x FREQUENCY ########
             '''
             # MEANS subject x bin x tone x congruent
-            DFOUT = DF.groupby(['subject','correct','frequency'])[pupil_dv].mean()
-            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct*frequency_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
+            DFOUT = DF.groupby(['subject','correct',self.freq_cond])[pupil_dv].mean()
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-frequency_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
 
             # save for RMANOVA format
-            DFANOVA =  DFOUT.unstack(['frequency','correct',]) 
+            DFANOVA =  DFOUT.unstack([self.freq_cond,'correct',]) 
             print(DFANOVA.columns)
             DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct*frequency_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-frequency_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
+            '''
+            ######## CORRECT ########
+            '''
+            # MEANS subject x bin x tone x congruent
+            DFOUT = DF.groupby(['subject','correct'])[pupil_dv].mean()
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
+
+            # save for RMANOVA format
+            DFANOVA =  DFOUT.unstack(['correct',]) 
+            print(DFANOVA.columns)
+            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
         
         '''
         ######## FREQUENCY ########
         '''
-        for pupil_dv in ['correct','RT']: # mean accuracy
-            DFOUT = DF.groupby(['subject','frequency'])[pupil_dv].mean()
+        for pupil_dv in ['correct','RT','pupil_feed_locked_t1','pupil_feed_locked_t2']: # mean accuracy
+            DFOUT = DF.groupby(['subject',self.freq_cond])[pupil_dv].mean()
             DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_frequency_{}.csv'.format(self.exp,pupil_dv))) # For descriptives
             # save for RMANOVA format
-            DFANOVA =  DFOUT.unstack(['frequency']) 
+            DFANOVA =  DFOUT.unstack([self.freq_cond]) 
             print(DFANOVA.columns)
             DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
             DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
         print('success: average_conditions')
 
     def plot_phasic_pupil_pe(self,):
-        # Phasic pupil feed_locked
+        # Phasic pupil feed_locked interaction frequency and accuracy
         # GROUP LEVEL DATA
         # separate lines for correct, x-axis is mapping conditions
         ylim = [ 
@@ -289,10 +319,10 @@ class higherLevel(object):
         tick_spacer = [1.5,1]
         
         dvs = ['pupil_feed_locked_t1','pupil_feed_locked_t2',]
-        ylabels = ['Pupil response\n(% signal change)','Pupil response\n(% signal change)']
-        factor = ['frequency','correct']
+        ylabels = ['Pupil response','Pupil response']
+        factor = [self.freq_cond,'correct'] 
         xlabel = 'Letter-color frequency'
-        xticklabels = ['20%','40%','80%'] 
+        xticklabels = ['33%','50%','84%'] 
         labels = ['Error','Correct']
         colors = ['red','blue'] 
         
@@ -305,7 +335,132 @@ class higherLevel(object):
         
         for dvi,pupil_dv in enumerate(dvs):
 
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_correct*frequency_{}.csv'.format(self.exp,pupil_dv)))
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder, '{}_correct-frequency_{}.csv'.format(self.exp, pupil_dv)))
+            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+            
+            # Group average per BIN WINDOW
+            GROUP = pd.DataFrame(DFIN.groupby(factor)[pupil_dv].agg(['mean', 'std']).reset_index())
+            GROUP['sem'] = np.true_divide(GROUP['std'], np.sqrt(len(self.subjects)))
+            print(GROUP)
+            
+            ax = fig.add_subplot(len(ylabels), 1, subplot_counter)
+            ax.set_box_aspect(1)
+            
+            subplot_counter += 1
+            ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+            # # plot line graph
+            for x in[0,1]: # split by error, correct
+                D = GROUP[GROUP['correct']==x]
+                print(D)
+                ax.errorbar(xind,np.array(D['mean']), yerr=np.array(D['sem']), fmt='-', elinewidth=1, label=labels[x], capsize=0, color=colors[x], alpha=1)
+
+            # set figure parameters
+            ax.set_title('{}'.format(pupil_dv))                
+            ax.set_ylabel(ylabels[dvi])
+            ax.set_xlabel(xlabel)
+            ax.set_xticks(xind)
+            ax.set_xticklabels(xticklabels)
+            ax.set_ylim(ylim[dvi])
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer[dvi]))
+            # ax.legend()
+
+            sns.despine(offset=10, trim=True)
+            plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder, '{}_correct-frequency_lines.pdf'.format(self.exp)))
+        print('success: plot_phasic_pupil_pe')
+        
+    def plot_behavior(self,):
+        # plots the group level means of accuracy and RT per mapping condition
+        # whole figure, 2 subplots
+        
+        #######################
+        # Frequency
+        #######################
+        dvs = ['correct','RT']
+        ylabels = ['Accuracy', 'RT (s)']
+        factor = self.freq_cond
+        xlabel = 'Letter-color frequency'
+        xticklabels = ['33%','50%','84%'] 
+        
+        bar_width = 0.7
+        xind = np.arange(len(xticklabels))
+        
+        fig = plt.figure(figsize=(2,2*len(ylabels)))
+        subplot_counter = 1
+        
+        for dvi,pupil_dv in enumerate(dvs):
+
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,'frequency',pupil_dv)))
+            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+            
+            # Group average per BIN WINDOW
+            GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
+            GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
+            print(GROUP)
+            
+            ax = fig.add_subplot(int(len(ylabels)), 1, int(subplot_counter)) # 1 subplot per bin window
+            ax.set_box_aspect(1)
+            
+            subplot_counter += 1
+            ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+                       
+            # plot bar graph
+            for xi,x in enumerate(GROUP[factor]):
+                # ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), color='blue', alpha=alphas[xi], edgecolor='white', ecolor='black')
+                ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), capsize=3, color=(0,0,0,0), edgecolor='black', ecolor='black')
+                
+            # individual points, repeated measures connected with lines
+            DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
+            DFIN = DFIN.unstack(factor)
+            for s in np.array(DFIN):
+                ax.plot(xind, s, linestyle='-',marker='o', markersize=3, fillstyle='full', color='black', alpha=0.1) # marker, line, black
+                
+            # set figure parameters
+            ax.set_title(ylabels[dvi]) # repeat for consistent formatting
+            ax.set_ylabel(ylabels[dvi])
+            ax.set_xlabel(xlabel)
+            ax.set_xticks(xind)
+            ax.set_xticklabels(xticklabels)
+            if pupil_dv == 'correct':
+                ax.set_ylim([0.0,1.])
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.2))
+                ax.axhline(0.5, linestyle='--', lw=1, alpha=1, color = 'k') # Add dashed horizontal line at chance level
+            else:
+                ax.set_ylim([0.2,1.8]) #RT
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.4))
+
+            sns.despine(offset=10, trim=True)
+            plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_{}_behavior.pdf'.format(self.exp,'frequency')))
+    
+        print('success: plot_behav')
+    
+    def plot_uncertainty_rt(self,):
+        # RT interaction frequency and accuracy
+        # GROUP LEVEL DATA
+        # separate lines for correct, x-axis is mapping conditions
+        ylim = [0.6,1.5]
+        tick_spacer = .2
+        
+        dvs = ['RT']
+        ylabels = ['RT (s)']
+        factor = [self.freq_cond,'correct']
+        xlabel = 'Letter-color frequency'
+        xticklabels = ['33%','50%','84%'] 
+        labels = ['Error','Correct']
+        colors = ['red','blue'] 
+        
+        xind = np.arange(len(xticklabels))
+        dot_offset = [0.05,-0.05]
+        
+        fig = plt.figure(figsize=(2,2*len(ylabels)))
+        
+        subplot_counter = 1
+        
+        for dvi,pupil_dv in enumerate(dvs):
+
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_correct-frequency_{}.csv'.format(self.exp,pupil_dv)))
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
             # Group average per BIN WINDOW
@@ -313,7 +468,9 @@ class higherLevel(object):
             GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
             print(GROUP)
             
-            ax = fig.add_subplot(len(ylabels),1,subplot_counter)
+            ax = fig.add_subplot(len(ylabels), 1, subplot_counter)
+            ax.set_box_aspect(1)
+            
             subplot_counter += 1
             ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
         
@@ -329,79 +486,73 @@ class higherLevel(object):
             ax.set_xlabel(xlabel)
             ax.set_xticks(xind)
             ax.set_xticklabels(xticklabels)
-            ax.set_ylim(ylim[dvi])
-            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer[dvi]))
+            ax.set_ylim(ylim)
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
             # ax.legend()
 
             sns.despine(offset=10, trim=True)
             plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_correct*frequency_lines.pdf'.format(self.exp)))
-        print('success: plot_phasic_pupil_pe')
-        
-    def plot_behavior(self,):
-        # plots the group level means of accuracy and RT per mapping condition
-        # whole figure, 2 subplots
-        
-        #######################
-        # Frequency
-        #######################
-        dvs = ['correct','RT']
-        ylabels = ['Accuracy', 'RT (s)']
-        factor = 'frequency'
-        xlabel = 'Letter-color frequency'
-        xticklabels = ['20%','40%','80%'] 
-        
-        bar_width = 0.7
-        xind = np.arange(len(xticklabels))
-        
-        fig = plt.figure(figsize=(2,2*len(ylabels)))
-        subplot_counter = 1
-        
-        for dvi,pupil_dv in enumerate(dvs):
-
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,factor,pupil_dv)))
-            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
-            
-            # Group average per BIN WINDOW
-            GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
-            GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
-            print(GROUP)
-            
-            ax = fig.add_subplot(int(len(ylabels)),1,int(subplot_counter)) # 1 subplot per bin window
-
-            subplot_counter += 1
-            ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
-                       
-            # plot bar graph
-            for xi,x in enumerate(GROUP[factor]):
-                # ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), color='blue', alpha=alphas[xi], edgecolor='white', ecolor='black')
-                ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), capsize=3, color=(0,0,0,0), edgecolor='black', ecolor='black')
-                
-            # individual points, repeated measures connected with lines
-            DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
-            DFIN = DFIN.unstack(factor)
-            for s in np.array(DFIN):
-                ax.plot(xind, s, linestyle='-',marker='o', markersize=3,fillstyle='full',color='black',alpha=0.05) # marker, line, black
-                
-            # set figure parameters
-            ax.set_ylabel(ylabels[dvi])
-            ax.set_xlabel(xlabel)
-            ax.set_xticks(xind)
-            ax.set_xticklabels(xticklabels)
-            if pupil_dv == 'correct':
-                ax.set_ylim([0.0,1.])
-                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.2))
-                ax.axhline(0.5, linestyle='--', lw=1, alpha=1, color = 'k') # Add dashed horizontal line at chance level
-            else:
-                ax.set_ylim([0.2,1.8]) #RT
-                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.4))
-
-            sns.despine(offset=10, trim=True)
-            plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_{}_behavior.pdf'.format(self.exp,factor)))
+        fig.savefig(os.path.join(self.figure_folder,'{}_correct-frequency_lines_{}.pdf'.format(self.exp,pupil_dv)))
+        print('success: plot_uncertainty_rt')
     
-        print('success: plot_behav')
-    
+    def individual_differences(self,):
+       # correlate interaction term in pupil with frequency effect in accuracy
+       dvs = ['pupil_feed_locked_t1','pupil_feed_locked_t2']
+       
+       fig = plt.figure(figsize=(2*len(dvs),2))
+       
+       for sp,pupil_dv in enumerate(dvs):
+           ax = fig.add_subplot(1,1*len(dvs),sp+1) # 1 subplot per bin window
+           ax.set_box_aspect(1)
+           
+           B = pd.read_csv(os.path.join(self.jasp_folder,'{}_frequency_correct_rmanova.csv'.format(self.exp)))
+           P = pd.read_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp, pupil_dv)))
+
+           # frequency effect
+           P['main_effect_freq'] = (P['80']-P['20'])
+           B['main_effect_freq'] = (B['80']-B['20']) # fraction correct
+           
+           x = np.array(B['main_effect_freq'])
+           y = np.array(P['main_effect_freq'])           
+           # all subjects
+           r1,pval1 = stats.spearmanr(x,y)
+           print('all subjects')
+           print(pupil_dv)
+           print('r={}, p-val={}'.format(r1,pval1))
+           # shell()
+           # all subjects in grey
+           ax.plot(x, y, 'o', markersize=3, color='black') # marker, line, black
+           m, b = np.polyfit(x, y, 1)
+           ax.plot(x, m*x+b, color='black',alpha=.5, label='all participants')
+           
+           # test with subjects that do better than chance on average
+           B['mean'] = (B['80']+B['20'])/2
+           B['remove'] = B['mean'] <= .5
+           print('N subjects removed = {}'.format(np.sum(B['remove'])))
+           
+           x = x[B['remove']==0]
+           y = y[B['remove']==0]
+           
+           r2,pval2 = stats.spearmanr(x,y)
+           print('all subjects')
+           print(pupil_dv)
+           print('r={}, p-val={}'.format(r2,pval2))
+           
+           # better than chance subjects in green
+           ax.plot(x, y, 'o', markersize=3, color='green') # marker, line, black
+           m, b = np.polyfit(x, y, 1)
+           ax.plot(x, m*x+b, color='green', alpha=.5, label='> chance level')
+           
+           # set figure parameters
+           ax.set_title('r1={}, p-val1={}\nr2={}, p-val2={}'.format(np.round(r1,2),np.round(pval1,3),np.round(r2,2),np.round(pval2,3)))
+           ax.set_ylabel('{} (84%-33%)'.format(pupil_dv))
+           ax.set_xlabel('accuracy (84%-33%)')
+           ax.legend()
+           
+       plt.tight_layout()
+       fig.savefig(os.path.join(self.figure_folder,'{}_frequency_individual_differences.pdf'.format(self.exp)))
+       print('success: individual_differences')
+       
     def dataframe_evoked_pupil_higher(self):
         # Evoked pupil responses, split by factors and save as higher level dataframe
         # Need to combine evoked files with behavioral data frame, looping through subjects
@@ -409,8 +560,8 @@ class higherLevel(object):
         
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
-        csv_names = deepcopy(['subject','correct','correct*frequency'])
-        factors = [['subject'],['correct'],['correct','frequency']]
+        csv_names = deepcopy(['subject','correct','frequency','correct*frequency'])
+        factors = [['subject'],['correct'],[self.freq_cond],['correct',self.freq_cond]]
         
         for t,time_locked in enumerate(self.time_locked):
             # Loop through conditions                
@@ -452,7 +603,7 @@ class higherLevel(object):
         ylim_feed = [-4,15]
         tick_spacer = 3
         
-        fig = plt.figure(figsize=(6,2))
+        fig = plt.figure(figsize=(8,2))
         #######################
         # FEEDBACK MEAN RESPONSE
         #######################
@@ -465,7 +616,8 @@ class higherLevel(object):
         end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
         mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
 
-        ax = fig.add_subplot(131)
+        ax = fig.add_subplot(141)
+        ax.set_box_aspect(1)
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
@@ -520,7 +672,7 @@ class higherLevel(object):
         end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
         mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
 
-        ax = fig.add_subplot(132)
+        ax = fig.add_subplot(142)
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
@@ -566,39 +718,100 @@ class higherLevel(object):
         # ax.legend(loc='best')
         
         #######################
-        # CORRECT x FREQUENCY
+        # FREQUENCY
         #######################
         t = 0
         time_locked = 'feed_locked'
-        csv_name = 'correct*frequency'
-        factor = ['correct','frequency']
+        csv_name = 'frequency'
+        factor = 'frequency'
         kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
         # determine time points x-axis given sample rate
         event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
         end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
         mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
 
-        ax = fig.add_subplot(133)
+        ax = fig.add_subplot(143)
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
         COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)))
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+        xticklabels = ['33%','50%','84%']
+        colorsts = ['indigo','indigo','indigo']
+        alpha_fills = [0.2,0.2,0.2] # fill
+        alpha_lines = [.3,.6,1.]
+        save_conds = []
+        
+        # plot time series
+        for i,x in enumerate(np.unique(COND[factor])):
+            TS = COND[COND[factor]==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_difference = save_conds[0]-save_conds[1]
+        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset,mid_point,end_sample]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_ylim(ylim_feed)
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        ax.legend(loc='best')
+        
+        #######################
+        # CORRECT x FREQUENCY
+        #######################
+        t = 0
+        time_locked = 'feed_locked'
+        csv_name = 'correct*frequency'
+        factor = ['correct',self.freq_cond]
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax = fig.add_subplot(144)
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)))
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+        
+        labels_frequences = np.unique(COND[self.freq_cond])
+        
         ########
         # make unique labels for each of the 4 conditions
         conditions = [
-            (COND['correct'] == 0) & (COND['frequency'] == 80), # Easy Error 1
-            (COND['correct'] == 1) & (COND['frequency'] == 80), # Easy Correct 2
-            (COND['correct'] == 0) & (COND['frequency'] == 20), # Hard Error 3
-            (COND['correct'] == 1) & (COND['frequency'] == 20), # Hard Correct 4
-            (COND['correct'] == 0) & (COND['frequency'] == 40), # Medium Error 5 # coded like this to keep in order with other experiments
-            (COND['correct'] == 1) & (COND['frequency'] == 40), # Medium Correct 6
+            (COND['correct'] == 0) & (COND[self.freq_cond] == labels_frequences[2]), # Easy Error 1
+            (COND['correct'] == 1) & (COND[self.freq_cond] == labels_frequences[2]), # Easy Correct 2
+            (COND['correct'] == 0) & (COND[self.freq_cond] == labels_frequences[0]), # Hard Error 3
+            (COND['correct'] == 1) & (COND[self.freq_cond] == labels_frequences[0]), # Hard Correct 4
+            (COND['correct'] == 0) & (COND[self.freq_cond] == labels_frequences[1]), # Medium Error 5 # coded like this to keep in order with other experiments
+            (COND['correct'] == 1) & (COND[self.freq_cond] == labels_frequences[1]), # Medium Correct 6
             ]
         values = [1,2,3,4,5,6]
         conditions = np.select(conditions, values) # don't add as column to time series otherwise it gets plotted
         ########
                     
-        xticklabels = ['Error 80%','Correct 80%','Error 20%','Correct 20%','Error 40%','Correct 40%']
+        xticklabels = ['Error 84%','Correct 84%','Error 33%','Correct 33%','Error 50%','Correct 50%']
         colorsts = ['r','b','r','b','r','b']
         alpha_fills = [0.2,0.2,0.1,0.1,0.15,.15] # fill
         alpha_lines = [1,1,0.3,0.3,0.6,0.6]
@@ -641,4 +854,198 @@ class higherLevel(object):
         plt.tight_layout()
         fig.savefig(os.path.join(self.figure_folder,'{}_evoked.pdf'.format(self.exp)))
         print('success: plot_evoked_pupil')
+    
+    def correlation_frequency_AQ(self):
+        
+        AQ = pd.read_csv(os.path.join(self.project_directory,'AQ_scores.csv'))
+        AQ = AQ.loc[:, ~AQ.columns.str.contains('^Unnamed')] # remove all unnamed columns
+        # AQ = AQ.loc[:, ~AQ.columns.str.contains('locked')] # remove all old pupil columns
+        # AQ = AQ.loc[:, ~AQ.columns.str.contains('subjects')] # remove duplicate AQ column
+        # AQ.to_csv(os.path.join(self.project_directory,'AQ_scores.csv'))
+        
+        dvs = ['pupil_feed_locked_t1','pupil_feed_locked_t2','correct']
+       
+        fig = plt.figure(figsize=(2*len(dvs),2))
+       
+        for sp,pupil_dv in enumerate(dvs):
+            ax = fig.add_subplot(1,1*len(dvs),sp+1) # 1 subplot per bin window
+            ax.set_box_aspect(1)
+            
+            P = pd.read_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp, pupil_dv)))
+            P = P.loc[:, ~P.columns.str.contains('^Unnamed')] # remove all unnamed columns
+            
+            # make sure subjects are aligned
+            M = AQ.merge(P, how='inner', on=['subject'])
+            
+            # frequency effect
+            M['main_effect_freq'] = (M['20']-M['80'])
+           
+            x = np.array(M['AQ'])
+            y = np.array(M['main_effect_freq'])           
+            # all subjects
+            r1,pval1 = stats.spearmanr(x,y)
+            print('all subjects')
+            print(pupil_dv)
+            print('r={}, p-val={}'.format(r1,pval1))
+            # shell()
+            # all subjects in grey
+            ax.plot(x, y, 'o', markersize=3, color='green') # marker, line, black
+            m, b = np.polyfit(x, y, 1)
+            ax.plot(x, m*x+b, color='black',alpha=.5, label='all participants')
+           
+            if pupil_dv == 'correct':
+                # test with subjects that do better than chance on average (only for accuracy)
+                M['mean'] = (M['80']+M['20'])/2
+                M['remove'] = M['mean'] <= .5
+                print('N subjects removed = {}'.format(np.sum(M['remove'])))
+           
+                x = x[M['remove']==0]
+                y = y[M['remove']==0]
+           
+                r2,pval2 = stats.spearmanr(x,y)
+                print('all subjects')
+                print(pupil_dv)
+                print('r={}, p-val={}'.format(r2,pval2))
+           
+                # better than chance subjects in green
+                ax.plot(x, y, 'o', markersize=3, color='black') # marker, line, black
+                m, b = np.polyfit(x, y, 1)
+                ax.plot(x, m*x+b, color='green', alpha=.5, label='> chance level')
+                ax.set_title('rho1={}, p-val1={}\nrho2={}, p-val2={}'.format(np.round(r1,2),np.round(pval1,3),np.round(r2,2),np.round(pval2,3)))
+            else:
+                ax.set_title('rho1={}, p-val1={}'.format(np.round(r1,2),np.round(pval1,3)))
+                
+            # set figure parameters
+            ax.set_ylabel('{} (33%-84%)'.format(pupil_dv))
+            ax.set_xlabel('AQ score')
+            ax.legend()
+           
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_frequency_AQ.pdf'.format(self.exp)))
+        print('success: correlation_frequency_AQ')
+
+    def correlation_accuracy_AQ(self):
+        
+        AQ = pd.read_csv(os.path.join(self.project_directory,'AQ_scores.csv'))
+        AQ = AQ.loc[:, ~AQ.columns.str.contains('^Unnamed')] # remove all unnamed columns
+        # AQ = AQ.loc[:, ~AQ.columns.str.contains('locked')] # remove all old pupil columns
+        # AQ = AQ.loc[:, ~AQ.columns.str.contains('subjects')] # remove duplicate AQ column
+        # AQ.to_csv(os.path.join(self.project_directory,'AQ_scores.csv'))
+        
+        dvs = ['pupil_feed_locked_t1','pupil_feed_locked_t2','RT']
+       
+        fig = plt.figure(figsize=(2*len(dvs),2))
+       
+        for sp,pupil_dv in enumerate(dvs):
+            ax = fig.add_subplot(1,1*len(dvs),sp+1) # 1 subplot per bin window
+            ax.set_box_aspect(1)
+            
+            P = pd.read_csv(os.path.join(self.jasp_folder,'{}_correct_{}_rmanova.csv'.format(self.exp, pupil_dv)))
+            P = P.loc[:, ~P.columns.str.contains('^Unnamed')] # remove all unnamed columns
+            
+            # make sure subjects are aligned
+            M = AQ.merge(P, how='inner', on=['subject'])
+
+            # frequency effect
+            M['main_effect'] = (M['False']-M['True'])
+           
+            x = np.array(M['AQ'])
+            y = np.array(M['main_effect'])           
+            # all subjects
+            r1,pval1 = stats.spearmanr(x,y)
+            print('all subjects')
+            print(pupil_dv)
+            print('r={}, p-val={}'.format(r1,pval1))
+            # shell()
+            # all subjects in grey
+            ax.plot(x, y, 'o', markersize=3, color='green') # marker, line, black
+            m, b = np.polyfit(x, y, 1)
+            ax.plot(x, m*x+b, color='black',alpha=.5, label='all participants')
+           
+            
+            ax.set_title('rho1={}, p-val1={}'.format(np.round(r1,2),np.round(pval1,3)))
+                
+            # set figure parameters
+            ax.set_ylabel('{} (Error-Correct)'.format(pupil_dv))
+            ax.set_xlabel('AQ score')
+            ax.legend()
+           
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_accuracy_AQ.pdf'.format(self.exp)))
+        print('success: correlation_accuracy_AQ')
+                
+    def correlation_interaction_AQ(self):
+        
+        AQ = pd.read_csv(os.path.join(self.project_directory,'AQ_scores.csv'))
+        AQ = AQ.loc[:, ~AQ.columns.str.contains('^Unnamed')] # remove all unnamed columns
+        # AQ = AQ.loc[:, ~AQ.columns.str.contains('locked')] # remove all old pupil columns
+        # AQ = AQ.loc[:, ~AQ.columns.str.contains('subjects')] # remove duplicate AQ column
+        # AQ.to_csv(os.path.join(self.project_directory,'AQ_scores.csv'))
+        
+        dvs = ['pupil_feed_locked_t1','pupil_feed_locked_t2']
+       
+        fig = plt.figure(figsize=(2*len(dvs),2))
+       
+        for sp,pupil_dv in enumerate(dvs):
+            ax = fig.add_subplot(1,1*len(dvs),sp+1) # 1 subplot per bin window
+            ax.set_box_aspect(1)
+            
+            P = pd.read_csv(os.path.join(self.jasp_folder,'{}_correct*frequency_{}_rmanova.csv'.format(self.exp, pupil_dv)))
+            P = P.loc[:, ~P.columns.str.contains('^Unnamed')] # remove all unnamed columns
+            
+            # make sure subjects are aligned
+            M = AQ.merge(P, how='inner', on=['subject'])
+
+            # interaction effect (Easy Error- Easy Correct) - (Hard Error - Hard Correct)
+            M['main_effect_freq'] = (M['(80, False)']-M['(80, True)'])-(M['(20, False)']-M['(20, True)'])
+           
+            x = np.array(M['AQ'])
+            y = np.array(M['main_effect_freq'])           
+            # all subjects
+            r1,pval1 = stats.spearmanr(x,y)
+            print('all subjects')
+            print(pupil_dv)
+            print('r={}, p-val={}'.format(r1,pval1))
+            # shell()
+            # all subjects in grey
+            ax.plot(x, y, 'o', markersize=3, color='green') # marker, line, black
+            m, b = np.polyfit(x, y, 1)
+            ax.plot(x, m*x+b, color='black',alpha=.5, label='all participants')
+           
+            # if pupil_dv == 'correct':
+            #     # test with subjects that do better than chance on average (only for accuracy)
+            #     M['mean'] = (M['80']+M['20'])/2
+            #     M['remove'] = M['mean'] <= .5
+            #     print('N subjects removed = {}'.format(np.sum(M['remove'])))
+            #
+            #     x = x[M['remove']==0]
+            #     y = y[M['remove']==0]
+            #
+            #     r2,pval2 = stats.spearmanr(x,y)
+            #     print('all subjects')
+            #     print(pupil_dv)
+            #     print('r={}, p-val={}'.format(r2,pval2))
+            #
+            #     # better than chance subjects in green
+            #     ax.plot(x, y, 'o', markersize=3, color='black') # marker, line, black
+            #     m, b = np.polyfit(x, y, 1)
+            #     ax.plot(x, m*x+b, color='green', alpha=.5, label='> chance level')
+            #     ax.set_title('rho1={}, p-val1={}\nrho2={}, p-val2={}'.format(np.round(r1,2),np.round(pval1,3),np.round(r2,2),np.round(pval2,3)))
+            # else:
+            
+            ax.set_title('rho1={}, p-val1={}'.format(np.round(r1,2),np.round(pval1,3)))
+                
+            # set figure parameters
+            ax.set_ylabel('{} (interaction)'.format(pupil_dv))
+            ax.set_xlabel('AQ score')
+            ax.legend()
+           
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_interaction_AQ.pdf'.format(self.exp)))
+        print('success: correlation_interaction_AQ')    
+        
+        
+        
+        
+
    

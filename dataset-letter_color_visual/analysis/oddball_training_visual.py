@@ -138,8 +138,9 @@ class higherLevel(object):
             GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
             print(GROUP)
             
-            ax = fig.add_subplot(int(len(ylabels)),1,int(subplot_counter)) # 1 subplot per bin window
-
+            ax = fig.add_subplot(int(len(ylabels)), 1, int(subplot_counter),  ) # 1 subplot per bin window
+            ax.set_box_aspect(1)
+            
             subplot_counter += 1
             ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
                        
@@ -152,19 +153,20 @@ class higherLevel(object):
             DFIN = DFIN.groupby(['subject',factor])[dv].mean() # hack for unstacking to work
             DFIN = DFIN.unstack(factor)
             for s in np.array(DFIN):
-                ax.plot(xind, s, linestyle='-',marker='o', markersize=3,fillstyle='full',color='black',alpha=0.05) # marker, line, black
+                ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=0.1) # marker, line, black
                 
             # set figure parameters
+            ax.set_title(ylabels[dvi]) # for consistent formatting
             ax.set_ylabel(ylabels[dvi])
             ax.set_xlabel(xlabel)
             ax.set_xticks(xind)
             ax.set_xticklabels(xticklabels)
-            if dv == 'correct':
-                ax.set_ylim([0.0,1.2])
-                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.2))
-            else:
-                ax.set_ylim([0.2,1]) #RT
-                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.2))
+            # if dv == 'correct':
+            #     ax.set_ylim([0.0,1.2])
+            #     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.2))
+            # else:
+            #     ax.set_ylim([0.2,1]) #RT
+            #     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.2))
 
             sns.despine(offset=10, trim=True)
             plt.tight_layout()
@@ -176,13 +178,32 @@ class higherLevel(object):
         # calculate the actual frequencies of the pairs presented during the oddball task
         # 10 trials x 10 reps = 100 trials PER letter PER frequency condition in the training task
         
+        letter_trials = 100 # how many trials per letter in the training task
+        
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF[DF['oddball']==0] # remove odd-balls
         DF['for_counts'] = np.repeat(1,len(DF)) # to count something
         
-        G = DF.groupby(['subject','frequency','letter','r'])['for_counts'].count() # group by letter and R-code of RGB
-        G.to_csv(os.path.join(self.dataframe_folder,'{}_actual_frequencies.csv'.format(self.exp)))
+        print(DF.groupby(['subject','frequency','letter'])['for_counts'].count())
         
+        G = DF.groupby(['subject','frequency','letter','r'])['for_counts'].count() # group by letter and R-code of RGB
+        G = pd.DataFrame(G)
+        
+        # calculate as percentage per letter
+        G['actual_frequency'] = np.true_divide(G['for_counts'],letter_trials)*100
+        
+        # split data into bins/quartiles based on actual frequencies
+        for b in [2,3,4]:
+            # group into frequency bins with equal numeric edges, but unequal data partitions
+            G['frequency_bin_{}'.format(b)]=pd.cut(G['actual_frequency'], bins=b) # 3 bins of equal width, but number of elements differ
+            print(G['frequency_bin_{}'.format(b)].value_counts())
+            
+            # group into equal-sized partitions of data, but unequal bin widths
+            G['frequency_qcut_{}'.format(b)]=pd.qcut(G['actual_frequency'], q=b)
+            print(G['frequency_qcut_{}'.format(b)].value_counts())
+
+        G.to_csv(os.path.join(self.dataframe_folder,'{}_actual_frequencies.csv'.format(self.exp)))
+
         print('success: calculate_actual_frequencies')
 
 

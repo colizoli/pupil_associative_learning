@@ -97,7 +97,8 @@ class higherLevel(object):
         # ax.fill_between(x,cis[0],cis[1],alpha=alpha_fill,**kw) # debug double label!
         ## standard error mean
         sde = np.true_divide(sd, np.sqrt(data.shape[0]))
-        ax.fill_between(x,est-sde,est+sde,alpha=alpha_fill,**kw) # debug double label!
+        fill_color = kw['color']
+        ax.fill_between(x, est-sde, est+sde, alpha=alpha_fill, color=fill_color, linewidth=0.0) # debug double label!
         
         ax.plot(x, est,alpha=alpha_line,**kw)
         ax.margins(x=0)
@@ -467,9 +468,7 @@ class higherLevel(object):
         factor = 'mapping1'
         xlabel = 'Cue-target frequency'
         xticklabels = ['20%','80%'] 
-        color = 'black'
-        alphas = [0.2, 0.8]
-        
+        color = 'black'        
         bar_width = 0.7
         xind = np.arange(len(xticklabels))
                 
@@ -490,7 +489,6 @@ class higherLevel(object):
                        
             # plot bar graph
             for x in GROUP[factor]:
-                # ax.bar(xind[x],np.array(GROUP['mean'][x]), width=bar_width, yerr=np.array(GROUP['sem'][x]), color='blue', alpha=alphas[x], edgecolor='white', ecolor='black')
                 ax.bar(xind[x],np.array(GROUP['mean'][x]), width=bar_width, yerr=np.array(GROUP['sem'][x]), capsize=3, color=(0,0,0,0), edgecolor='black', ecolor='black')
                 
             # individual points, repeated measures connected with lines

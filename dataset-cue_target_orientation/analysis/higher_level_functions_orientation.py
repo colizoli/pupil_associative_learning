@@ -866,8 +866,8 @@ class higherLevel(object):
            print('all subjects')
            print(pupil_dv)
            print('r={}, p-val={}'.format(r,pval))
-           # shell()
-           # all subjects in grey
+
+           # all subjects
            ax.plot(x, y, 'o', markersize=3, color='green') # marker, line, black
            m, b = np.polyfit(x, y, 1)
            ax.plot(x, m*x+b, color='green',alpha=.5, label='all participants')
@@ -876,7 +876,7 @@ class higherLevel(object):
            ax.set_title('r={}, p-val={}'.format(np.round(r,2),np.round(pval,3)))
            ax.set_ylabel('{} (80%-20%)'.format(pupil_dv))
            ax.set_xlabel('accuracy (80%-20%)')
-           ax.legend()
+           # ax.legend()
            
            plt.tight_layout()
            fig.savefig(os.path.join(self.figure_folder,'{}_frequency_individual_differences_{}.pdf'.format(self.exp, pupil_dv)))

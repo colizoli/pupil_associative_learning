@@ -86,15 +86,22 @@ class higherLevel(object):
         self.downsample_rate = 20 # 20 Hz
         self.downsample_factor = self.sample_rate / self.downsample_rate 
         
+        
     def tsplot(self, ax, data, alpha_fill=0.2,alpha_line=1, **kw):
         # replacing seaborn tsplot
         x = np.arange(data.shape[1])
         est = np.mean(data, axis=0)
         sd = np.std(data, axis=0)
-        cis = self.bootstrap(data)
-        ax.fill_between(x,cis[0],cis[1],alpha=alpha_fill,**kw) # debug double label!
-        ax.plot(x,est,alpha=alpha_line,**kw)
+        ## confidence intervals
+        # cis = self.bootstrap(data)
+        # ax.fill_between(x,cis[0],cis[1],alpha=alpha_fill,**kw) # debug double label!
+        ## standard error mean
+        sde = np.true_divide(sd, np.sqrt(data.shape[0]))
+        ax.fill_between(x,est-sde,est+sde,alpha=alpha_fill,**kw) # debug double label!
+        
+        ax.plot(x, est,alpha=alpha_line,**kw)
         ax.margins(x=0)
+    
     
     def bootstrap(self, data, n_boot=10000, ci=68):
         # bootstrap confidence interval for new tsplot
@@ -107,6 +114,7 @@ class higherLevel(object):
         s1 = np.apply_along_axis(stats.scoreatpercentile, 0, b, 50.-ci/2.)
         s2 = np.apply_along_axis(stats.scoreatpercentile, 0, b, 50.+ci/2.)
         return (s1,s2)
+        
         
     # common functions
     def cluster_sig_bar_1samp(self,array, x, yloc, color, ax, threshold=0.05, nrand=5000, cluster_correct=True):
@@ -149,6 +157,7 @@ class higherLevel(object):
             for sig in s_bar:
                 ax.hlines(((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0], x[int(sig[0])]-(np.diff(x)[0] / 2.0), x[int(sig[1])]+(np.diff(x)[0] / 2.0), color=color, alpha=1, linewidth=2.5)
     
+    
     def higherlevel_log_conditions(self,):
         # for each LOG file for each subject, computes mappings, accuracy, RT outliers (3 STD group level)
         # note it was not possible to miss a trial
@@ -160,20 +169,22 @@ class higherLevel(object):
         # tone 'play_tone': TRUE or FALSE
         # target 'target_ori': 45 degrees  = right orientation, 315 degrees = left orientation
         # counterbalancing: 'normal'
+        # "mapping1" always refers to the high frequency cue-target contingencies in phase 1
+        # trials 1-200 phase1, trials 201-400 phase2
+        # phase1 = np.arange(1,201) # excluding 201
+        # phase2 = np.arange(201,401) # excluding 401
         
-        # normal congruency updating phase: combinations of cue, tone and target:
+        # normal congruency phase1: combinations of cue, tone and target:
         mapping1 = ['0_True_45','0_False_45','45_True_315','45_False_315']
         mapping2 = ['0_True_315','0_False_315','45_True_45','45_False_45']
-        
-        # models congruency flips after 200 trials: trials 1-200 updating, trials 201-400 revision
-        updating = np.arange(1,201) # excluding 201
-        revision = np.arange(201,401) # excluding 401
         
         # loop through subjects' log files
         # make a copy in derivatives folder to add phasics to
         for s,subj in enumerate(self.subjects):
-            this_log = os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)) # copy source, output in derivatives folder
-            this_df = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp))) # SOURCE DIR
+            this_log = os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)) # derivatives folder            
+            this_df = pd.read_csv(this_log) 
+            # drop 'updating' column if it exists'
+            this_df = this_df.drop(['updating'], axis=1, errors='ignore')
             
             ###############################
             # compute column for MAPPING
@@ -204,21 +215,21 @@ class higherLevel(object):
             
             ###############################
             # compute column for MODEL PHASE
-            this_df['updating'] = np.array(this_df['trial_counter'] <= 200, dtype=int) # updating phase = 1, revision phase = 0
+            this_df['phase1'] = np.array(this_df['trial_counter'] <= 200, dtype=int) # phase = 1, revision phase = 0
             
             ###############################
             # compute column for MAPPING FREQUENCY
             frequency = [
-                # updating
-                (this_df['updating'] == 1) & (this_df['mapping1'] == 1) & (this_df['play_tone'] == 1), # mapping 1 updating tone 80%
-                (this_df['updating'] == 1) & (this_df['mapping1'] == 1) & (this_df['play_tone'] == 0), # mapping 1 updating no tone 80%
-                (this_df['updating'] == 1) & (this_df['mapping1'] == 0) & (this_df['play_tone'] == 1), # mapping 2 updating tone 20%
-                (this_df['updating'] == 1) & (this_df['mapping1'] == 0) & (this_df['play_tone'] == 0), # mapping 2 updating no tone 20%
-                # revision
-                (this_df['updating'] == 0) & (this_df['mapping1'] == 1) & (this_df['play_tone'] == 1), # mapping 1 updating tone 20% FLIP!!
-                (this_df['updating'] == 0) & (this_df['mapping1'] == 1) & (this_df['play_tone'] == 0), # mapping 1 updating no tone 80%
-                (this_df['updating'] == 0) & (this_df['mapping1'] == 0) & (this_df['play_tone'] == 1), # mapping 2 updating tone 80% FLIP
-                (this_df['updating'] == 0) & (this_df['mapping1'] == 0) & (this_df['play_tone'] == 0), # mapping 2 updating no tone 20%
+                # phase 1
+                (this_df['phase1'] == 1) & (this_df['mapping1'] == 1) & (this_df['play_tone'] == 1), # mapping 1 phase1 tone 80%
+                (this_df['phase1'] == 1) & (this_df['mapping1'] == 1) & (this_df['play_tone'] == 0), # mapping 1 phase1 no tone 80%
+                (this_df['phase1'] == 1) & (this_df['mapping1'] == 0) & (this_df['play_tone'] == 1), # mapping 2 phase1 tone 20%
+                (this_df['phase1'] == 1) & (this_df['mapping1'] == 0) & (this_df['play_tone'] == 0), # mapping 2 phase1 no tone 20%
+                # phase 2
+                (this_df['phase1'] == 0) & (this_df['mapping1'] == 1) & (this_df['play_tone'] == 1), # mapping 1 phase2 tone 20% FLIP!!
+                (this_df['phase1'] == 0) & (this_df['mapping1'] == 1) & (this_df['play_tone'] == 0), # mapping 1 phase2 no tone 80%
+                (this_df['phase1'] == 0) & (this_df['mapping1'] == 0) & (this_df['play_tone'] == 1), # mapping 2 phase2 tone 80% FLIP
+                (this_df['phase1'] == 0) & (this_df['mapping1'] == 0) & (this_df['play_tone'] == 0), # mapping 2 phase2 no tone 20%
                 ]
             values = [80,80,20,20,20,80,80,20]
             this_df['frequency'] = np.select(frequency, values)
@@ -240,6 +251,7 @@ class higherLevel(object):
             this_df = this_df.loc[:, ~this_df.columns.str.contains('^Unnamed')] # remove all unnamed columns
             this_df.to_csv(os.path.join(this_log))
         print('success: higherlevel_log_conditions')
+       
        
     def higherlevel_get_phasics(self,):
         # computes phasic pupil in selected time window per trial
@@ -290,6 +302,7 @@ class higherLevel(object):
                 
     def create_subjects_dataframe(self,):
         # combine behavior + phasic pupil dataframes ALL SUBJECTS
+        # adds target_locked baselines to dataframe
         # flags outliers based on RT (separate column) per subject
         # drops phase 2 trials
         # output in dataframe folder: task-predictions_subjects.csv
@@ -301,9 +314,13 @@ class higherLevel(object):
             this_data = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)))
             this_data = this_data.loc[:, ~this_data.columns.str.contains('^Unnamed')] # remove all unnamed columns
             
+            # open baseline pupil to add to dataframes as well
+            this_baseline = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_baselines.csv'.format(subj,self.exp,'target_locked')))
+            this_baseline = this_baseline.loc[:, ~this_baseline.columns.str.contains('^Unnamed')] # remove all unnamed columns
+            this_data['pupil_baseline_target_locked'] = np.array(this_baseline)
+            
             ###############################
             # compute column for OUTLIER REACTION TIMES: transform to Z and exclude +- 3*STD seconds
-            
             RT = stats.zscore(this_data['reaction_time']) # use STD based on z transform first
             outlier_rt = [
                 (RT < -3), # lower limit < -3 STD zscore 
@@ -322,13 +339,13 @@ class higherLevel(object):
         ### print how many outliers in phase 1
         print('Phase 1 outliers = {}%'.format(np.true_divide(np.sum(DF['outlier_rt']),DF.shape[0])*100))
 
-        # trial counts    
+        # trial counts (note: no missing trials because no maximum response window!)
         missing = DF.groupby(['subject','keypress'])['keypress'].value_counts()
         missing.to_csv(os.path.join(self.dataframe_folder,'{}_behavior_counts_subject.csv'.format(self.exp)))
         # combination of conditions
-        missing = DF.groupby(['subject','mapping1','play_tone','correct','updating'])['keypress'].count()
+        missing = DF.groupby(['subject','mapping1','play_tone','correct','phase1'])['keypress'].count()
         missing.to_csv(os.path.join(self.dataframe_folder,'{}_behavior_counts_conditions.csv'.format(self.exp)))
-        
+
         #####################
         # save whole dataframe with all subjects
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns
@@ -336,8 +353,10 @@ class higherLevel(object):
         #####################
         print('success: create_subjects_dataframe')
 
+
     def average_conditions(self,):
         # averages the phasic pupil per subject PER CONDITION 
+        # drops outliers
         # saves separate dataframes for the different combinations of factors
         
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
@@ -353,19 +372,19 @@ class higherLevel(object):
         '''
         ######## CORRECT x MAPPING1 ########
         '''
-        for pupil_dv in ['pupil_target_locked_t1','pupil_target_locked_t2','reaction_time']:
+        for pupil_dv in ['reaction_time', 'pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']:
             # MEANS subject x bin x tone x congruent
             DFOUT = DF.groupby(['subject','correct','mapping1'])[pupil_dv].mean()
-            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct*mapping1_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-mapping1_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
             # save for RMANOVA format
             DFANOVA =  DFOUT.unstack(['mapping1','correct']) 
             print(DFANOVA.columns)
             DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct*mapping1_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-mapping1_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
         '''
         ######## MAPPING1 ########
         '''
-        for pupil_dv in ['correct','reaction_time']: # mean accuracy
+        for pupil_dv in ['correct','reaction_time','pupil_target_locked_t1','pupil_target_locked_t2', 'pupil_baseline_target_locked']: 
             DFOUT = DF.groupby(['subject','mapping1'])[pupil_dv].mean()
             DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_mapping1_{}.csv'.format(self.exp,pupil_dv))) # For descriptives
             # save for RMANOVA format
@@ -375,18 +394,21 @@ class higherLevel(object):
             DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_mapping1_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
         print('success: average_conditions')
         
+        
     def plot_phasic_pupil_pe(self,):
-        # Phasic pupil target_locked, only phase 1
+        # Phasic pupil target_locked interaction frequency and accuracy, only phase 1
         # GROUP LEVEL DATA
         # separate lines for correct, x-axis is mapping conditions
         ylim = [ 
-            [-1.5,6.5], # t1
-            [-3.25,2.25], # t2
+            [-3.25, 2.25], # t1
+            [-3.25, 2.25], # t2
+            [-3, 3], # baseline
+            [0.6,1.5] # RT
         ]
-        tick_spacer = [1.5,1]
+        tick_spacer = [1, 1, 2, .2]
         
-        dvs = ['pupil_target_locked_t1','pupil_target_locked_t2']
-        ylabels = ['Pupil response\n(% signal change)', 'Pupil response\n(% signal change)']
+        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked', 'reaction_time']
+        ylabels = ['Pupil response\n(% signal change)', 'Pupil response\n(% signal change)', 'Pupil response\n(% signal change)', 'RT (s)']
         factor = ['mapping1','correct']
         xlabel = 'Cue-target frequency'
         xticklabels = ['20%','80%'] 
@@ -396,11 +418,11 @@ class higherLevel(object):
         xind = np.arange(len(xticklabels))
         dot_offset = [0.1,-0.1]
         
-        fig = plt.figure(figsize=(2,2*len(ylabels)))
-        subplot_counter = 1
-        
-        for dvi,pupil_dv in enumerate(dvs):
-
+        for dvi, pupil_dv in enumerate(dvs):
+            
+            fig = plt.figure(figsize=(2, 2))
+            ax = fig.add_subplot(111) # 1 subplot per bin window
+            
             DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_correct*mapping1_{}.csv'.format(self.exp,pupil_dv)))
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
@@ -409,17 +431,14 @@ class higherLevel(object):
             GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
             print(GROUP)
             
-            ax = fig.add_subplot(len(ylabels),1,subplot_counter) # 1 subplot per bin window
-            subplot_counter += 1
             ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
  
             # plot line graph
             for x in[0,1]: # split by error, correct
                 D = GROUP[GROUP['correct']==x]
                 print(D)
-                ax.errorbar(xind,np.array(D['mean']),yerr=np.array(D['sem']),fmt='-',elinewidth=1,label=labels[x],capsize=0, color=colors[x], alpha=1)
-                ax.plot(xind,np.array(D['mean']),linestyle='-',label=labels[x],color=colors[x], alpha=1)
-
+                ax.errorbar(xind, np.array(D['mean']), yerr=np.array(D['sem']), marker='o', markersize=3, fmt='-', elinewidth=1, label=labels[x], capsize=3, color=colors[x], alpha=1)
+                
             # set figure parameters
             ax.set_title('{}'.format(pupil_dv))                
             ax.set_ylabel(ylabels[dvi])
@@ -432,7 +451,7 @@ class higherLevel(object):
         
             sns.despine(offset=10, trim=True)
             plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_correct*mapping1_lines.pdf'.format(self.exp)))
+            fig.savefig(os.path.join(self.figure_folder,'{}_correct*mapping1_{}_lines.pdf'.format(self.exp, pupil_dv)))
         print('success: plot_phasic_pupil_pe')
         
 
@@ -453,11 +472,11 @@ class higherLevel(object):
         
         bar_width = 0.7
         xind = np.arange(len(xticklabels))
-
-        fig = plt.figure(figsize=(2,2*len(ylabels)))
-        subplot_counter = 1
-        
+                
         for dvi,pupil_dv in enumerate(dvs):
+            
+            fig = plt.figure(figsize=(2,2))
+            ax = fig.add_subplot(111) # 1 subplot per bin windo
 
             DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,factor,pupil_dv)))
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
@@ -467,9 +486,6 @@ class higherLevel(object):
             GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
             print(GROUP)
                         
-            ax = fig.add_subplot(int(len(ylabels)),1,int(subplot_counter)) # 1 subplot per bin window
-
-            subplot_counter += 1
             ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
                        
             # plot bar graph
@@ -481,7 +497,7 @@ class higherLevel(object):
             DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
             DFIN = DFIN.unstack(factor)
             for s in np.array(DFIN):
-                ax.plot(xind, s, linestyle='-',marker='o', markersize=3,fillstyle='full',color='black',alpha=0.05) # marker, line, black
+                ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.2) # marker, line, black
 
             # set figure parameters
             ax.set_ylabel(ylabels[dvi])
@@ -497,9 +513,10 @@ class higherLevel(object):
 
             sns.despine(offset=10, trim=True)
             plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_mapping1_behavior.pdf'.format(self.exp)))
+            fig.savefig(os.path.join(self.figure_folder,'{}_mapping1_{}.pdf'.format(self.exp, pupil_dv)))
         print('success: plot_behav')
     
+
     def dataframe_evoked_pupil_higher(self):
         # Evoked pupil responses, split by self.factors and save as higher level dataframe
         # Need to combine evoked files with behavioral data frame, looping through subjects
@@ -508,8 +525,8 @@ class higherLevel(object):
         
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
-        csv_names = deepcopy(['subject','correct','correct*mapping1'])
-        factors = [['subject'],['correct'],['correct','mapping1']]
+        csv_names = deepcopy(['subject','correct','mapping1','correct-mapping1'])
+        factors = [['subject'],['correct'],['mapping1'],['correct','mapping1']]
         
         for t,time_locked in enumerate(self.time_locked):
             # Loop through conditions                
@@ -546,18 +563,20 @@ class higherLevel(object):
                 COND.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,cond)))
         print('success: dataframe_evoked_pupil_higher')
     
+    
     def plot_evoked_pupil(self):
-        # plots evoked pupil 2 subplits
+        # plots evoked pupil, each condition own figure
         # plots the group level mean for target_locked
         # plots the group level accuracy x mapping interaction for target_locked
 
         ylim_feed = [-2.5,2.5]
         tick_spacer = 2.5
         
-        fig = plt.figure(figsize=(6,2))
         #######################
         # FEEDBACK MEAN RESPONSE
         #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
         t = 0
         time_locked = 'target_locked'
         factor = 'subject'
@@ -567,7 +586,6 @@ class higherLevel(object):
         end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
         mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
                 
-        ax = fig.add_subplot(131)
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
@@ -594,6 +612,13 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
             
+        # shade baseline pupil
+        twb = [-self.baseline_window, 0]
+        baseline_onset = int(abs(twb[0]*self.sample_rate))
+        twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
+        twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
+        ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
+            
         xticks = [event_onset,mid_point,end_sample]
         ax.set_xticks(xticks)
         ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
@@ -609,9 +634,16 @@ class higherLevel(object):
         print('mean response = {} peak @ {} seconds'.format(np.max(m),argm))
         # ax.axvline(np.argmax(m), lw=0.25, alpha=0.5, color = 'k')
         
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_evoked_{}.pdf'.format(self.exp, factor)))
+        
         #######################
         # CORRECT
         #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
         t = 0
         time_locked = 'target_locked'
         csv_name = 'correct'
@@ -622,7 +654,6 @@ class higherLevel(object):
         end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
         mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
 
-        ax = fig.add_subplot(132)
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
@@ -666,13 +697,82 @@ class higherLevel(object):
         ax.set_ylabel('Pupil response\n(% signal change)')
         ax.set_title(time_locked)
         # ax.legend(loc='best')
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # FREQUENCY
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'mapping1'
+        factor = 'mapping1'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)))
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+        xticklabels = ['20%','80%']
+        colorsts = ['indigo','indigo',]
+        alpha_fills = [0.2,0.2] # fill
+        alpha_lines = [0.2,1]
+        save_conds = []
+        
+        # plot time series
+        for i,x in enumerate(np.unique(COND[factor])):
+            TS = COND[COND[factor]==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_difference = save_conds[0]-save_conds[1]
+        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset,mid_point,end_sample]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_ylim(ylim_feed)
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        # ax.legend(loc='best')
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_evoked_{}.pdf'.format(self.exp, factor)))
         
         #######################
         # CORRECT x MAPPING1
         #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
         t = 0
         time_locked = 'target_locked'
-        csv_name = 'correct*mapping1'
+        csv_name = 'correct-mapping1'
         factor = ['correct','mapping1']
         kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
         # determine time points x-axis given sample rate
@@ -680,7 +780,6 @@ class higherLevel(object):
         end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
         mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
 
-        ax = fig.add_subplot(133)
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
@@ -700,15 +799,16 @@ class higherLevel(object):
                     
         xticklabels = ['Error 80%','Correct 80%','Error 20%','Correct 20%']
         colorsts = ['r','b','r','b']
-        alpha_fills = [0.2,0.2,0.05,0.05] # fill
-        alpha_lines = [1,1,0.4,0.4]
+        alpha_fills = [0.2,0.2,0.1,0.1] # fill
+        alpha_lines = [1,1,.8,.8]
+        linestyle= ['solid','solid','dashed','dashed']
         save_conds = []
         # plot time series
         
         for i,x in enumerate(values):
             TS = COND[conditions==x] # select current condition data only
             TS = np.array(TS.iloc[:,-kernel:])
-            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            self.tsplot(ax, TS, linestyle=linestyle[i], color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
             save_conds.append(TS) # for stats
         
         # stats        
@@ -734,11 +834,50 @@ class higherLevel(object):
         ax.set_xlabel('Time from feedback (s)')
         ax.set_ylabel('Pupil response\n(% signal change)')
         ax.set_title(time_locked)
-        # ax.legend(loc='best')
+        ax.legend(loc='best')
                 
         # whole figure format
         sns.despine(offset=10, trim=True)
         plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_evoked.pdf'.format(self.exp)))
+        fig.savefig(os.path.join(self.figure_folder,'{}_evoked_{}.pdf'.format(self.exp, csv_name)))
         print('success: plot_evoked_pupil')
     
+    
+    def individual_differences(self,):
+       # correlate interaction term in pupil with frequency effect in accuracy
+       
+       dvs = ['pupil_target_locked_t1','pupil_target_locked_t2', 'pupil_baseline_target_locked']
+              
+       for sp,pupil_dv in enumerate(dvs):
+           fig = plt.figure(figsize=(2,2))
+           ax = fig.add_subplot(111) # 1 subplot per bin window
+           
+           B = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_correct_rmanova.csv'.format(self.exp)))
+           P = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_{}_rmanova.csv'.format(self.exp, pupil_dv)))
+
+           # frequency effect
+           P['main_effect_freq'] = (P['1']-P['0']) # mapping1=1 is 80% condition
+           B['main_effect_freq'] = (B['1']-B['0']) # fraction correct
+           
+           x = np.array(B['main_effect_freq'])
+           y = np.array(P['main_effect_freq'])           
+           # all subjects
+           r,pval = stats.spearmanr(x,y)
+           print('all subjects')
+           print(pupil_dv)
+           print('r={}, p-val={}'.format(r,pval))
+           # shell()
+           # all subjects in grey
+           ax.plot(x, y, 'o', markersize=3, color='green') # marker, line, black
+           m, b = np.polyfit(x, y, 1)
+           ax.plot(x, m*x+b, color='green',alpha=.5, label='all participants')
+           
+           # set figure parameters
+           ax.set_title('r={}, p-val={}'.format(np.round(r,2),np.round(pval,3)))
+           ax.set_ylabel('{} (80%-20%)'.format(pupil_dv))
+           ax.set_xlabel('accuracy (80%-20%)')
+           ax.legend()
+           
+           plt.tight_layout()
+           fig.savefig(os.path.join(self.figure_folder,'{}_frequency_individual_differences_{}.pdf'.format(self.exp, pupil_dv)))
+       print('success: individual_differences')

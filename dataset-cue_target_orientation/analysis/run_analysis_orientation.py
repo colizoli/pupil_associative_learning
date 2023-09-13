@@ -121,15 +121,17 @@ if higher_level:
 
     # higherLevel.higherlevel_log_conditions()     # computes mappings, accuracy, and missing trials
     # higherLevel.higherlevel_get_phasics()        # computes phasic pupil for each subject (adds to log files)
-    # higherLevel.create_subjects_dataframe()      # combines all subjects' behavioral files: task-predictions_subjects.csv, flags outliers, drops phase 2 trials
+    # higherLevel.create_subjects_dataframe()      # adds baseline pupil, combines all subjects' behavioral files: task-predictions_subjects.csv, flags outliers, drops phase 2 trials
     ''' Note: the functions after this are using: task-cue_target_orientation_subjects.csv
     '''
     ''' DV averages within bin windows
     '''
-    # higherLevel.average_conditions()              # group level data frames for all main effects + interaction
+    # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
     # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
     # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
+    # higherLevel.individual_differences()         # individual differences correlation between behavior and pupil
+    
     ''' Evoked pupil response
     '''
     # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+ 

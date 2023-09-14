@@ -12,13 +12,13 @@ import numpy as np
 import scipy as sp
 import scipy.stats as stats
 import statsmodels.formula.api as sm
-from scipy.signal import decimate
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import mne
 import re
+from statsmodels.stats.anova import AnovaRM
 
 #conda install -c conda-forge/label/gcc7 mne
 from copy import deepcopy
@@ -26,7 +26,7 @@ import itertools
 # import pingouin as pg # stats package
 # from pingouin import pairwise_ttests
 
-from IPython import embed as shell
+from IPython import embed as shell # for debugging only
 
 
 matplotlib.rcParams['pdf.fonttype'] = 42
@@ -117,7 +117,7 @@ class higherLevel(object):
 
 
     # common functions
-    def cluster_sig_bar_1samp(self,array, x, yloc, color, ax, threshold=0.05, nrand=5000, cluster_correct=True):
+    def cluster_sig_bar_1samp(self, array, x, yloc, color, ax, threshold=0.05, nrand=5000, cluster_correct=True):
         # permutation-based cluster correction on time courses, then plots the stats as a bar in yloc
         if yloc == 1:
             yloc = 10
@@ -156,7 +156,27 @@ class higherLevel(object):
             s_bar = zip(np.where(np.diff(sig_indices)==1)[0]+1, np.where(np.diff(sig_indices)==-1)[0])
             for sig in s_bar:
                 ax.hlines(((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0], x[int(sig[0])]-(np.diff(x)[0] / 2.0), x[int(sig[1])]+(np.diff(x)[0] / 2.0), color=color, alpha=1, linewidth=2.5)
-    
+
+
+    def timeseries_fdr_correction(self,  xind, color, ax, pvals, alpha=0.05, method='indep'):
+        # FDR correction on pvals, plot on corrected (black) and uncorrected (purple) on timecourse
+        # https://mne.tools/stable/generated/mne.stats.fdr_correction.html
+
+        # UNCORRECTED
+        yloc = 5
+        sig_indices = np.array(pvals < alpha, dtype=int)
+        yvalues = sig_indices * (((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0])
+        yvalues[yvalues == 0] = np.nan # or use np.nan
+        ax.plot(xind, yvalues, linestyle='None', marker='.', color='purple', alpha=0.2)
+        
+        # FDR CORRECTED
+        yloc = 8
+        reject, pval_corrected = mne.stats.fdr_correction(pvals, alpha=alpha, method=method)
+        sig_indices = np.array(reject, dtype=int)
+        yvalues = sig_indices * (((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0])
+        yvalues[yvalues == 0] = np.nan # or use np.nan
+        ax.plot(xind, yvalues, linestyle='None', marker='.', color=color, alpha=1)
+
     
     def higherlevel_get_phasics(self,):
         # computes phasic pupil in selected time window per trial
@@ -479,6 +499,7 @@ class higherLevel(object):
            fig.savefig(os.path.join(self.figure_folder,'{}_frequency_individual_differences_{}.pdf'.format(self.exp, pupil_dv)))
        print('success: individual_differences')
        
+       
     def dataframe_evoked_pupil_higher(self):
         # Evoked pupil responses, split by factors and save as higher level dataframe
         # Need to combine evoked files with behavioral data frame, looping through subjects
@@ -763,7 +784,7 @@ class higherLevel(object):
         colorsts = ['r', 'b', 'r', 'b', 'r', 'b']
         alpha_fills = [0.2, 0.2, 0.1, 0.1, 0.15, .15] # fill
         alpha_lines = [1, 1, 0.6, 0.6, 0.8, 0.8]
-        linestyle= ['solid', 'solid', 'dashed', 'dashed', 'dotted', 'dotted']
+        linestyle= ['solid', 'solid', 'dotted', 'dotted', 'dashed', 'dashed']
         save_conds = []
         # plot time series
         
@@ -773,10 +794,19 @@ class higherLevel(object):
             self.tsplot(ax, TS, linestyle=linestyle[i], color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
             save_conds.append(TS) # for stats
         
+        ### STATS - RM_ANOVA ###
+        # loop over time points, run anova, save F-statistic for cluster correction
+        # first 3 columns are subject, correct, frequency
+        # get pval for the interaction term (last element in res.anova_table)
+        interaction_pvals = np.empty(COND.shape[-1]-3)
+        for timepoint in np.arange(COND.shape[-1]-3):            
+            this_df = COND.iloc[:,:timepoint+4]
+            aovrm = AnovaRM(this_df, str(timepoint), 'subject', within=['correct', 'frequency'])
+            res = aovrm.fit()
+            interaction_pvals[timepoint] = np.array(res.anova_table)[-1][-1] # last row, last element
+            
         # stats        
-        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
-        # pe_interaction = (save_conds[0]-save_conds[1]) - (save_conds[2]-save_conds[3])
-        # self.cluster_sig_bar_1samp(array=pe_interaction, x=pd.Series(range(pe_interaction.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+        self.timeseries_fdr_correction(pvals=interaction_pvals, xind=pd.Series(range(interaction_pvals.shape[-1])), color='black', ax=ax)
 
         # set figure parameters
         ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0

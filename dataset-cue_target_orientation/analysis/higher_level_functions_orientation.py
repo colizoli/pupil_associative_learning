@@ -158,7 +158,22 @@ class higherLevel(object):
             for sig in s_bar:
                 ax.hlines(((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0], x[int(sig[0])]-(np.diff(x)[0] / 2.0), x[int(sig[1])]+(np.diff(x)[0] / 2.0), color=color, alpha=1, linewidth=2.5)
     
-    
+    def fisher_transform(self,r):
+        """Compute Fisher transform on correlation coefficient.
+        
+        Parameters
+        ----------
+        r : array_like
+            The coefficients to normalize
+        
+        Returns
+        -------
+        0.5*np.log((1+r)/(1-r)) : ndarray
+            Array of shape r with normalized coefficients.
+        """
+        return 0.5*np.log((1+r)/(1-r))
+        
+        
     def higherlevel_log_conditions(self,):
         # for each LOG file for each subject, computes mappings, accuracy, RT outliers (3 STD group level)
         # note it was not possible to miss a trial
@@ -369,12 +384,24 @@ class higherLevel(object):
         # drop outliers
         DF = DF[DF['outlier_rt']==0]
         ############################
-                        
+        
+        '''
+        ######## CORRECT x MAPPING1 x TIME WINDOW ########
+        '''
+        DFOUT = DF.groupby(['subject','correct','mapping1']).aggregate({'pupil_target_locked_t1':'mean', 'pupil_target_locked_t2':'mean'})
+        # DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-mapping1-timewindow_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
+        # save for RMANOVA format
+        DFANOVA =  DFOUT.unstack(['mapping1','correct']) 
+        print(DFANOVA.columns)
+        DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+        cols = ['20_error_t1', '80_error_t1', '20_correct_t1', '80_correct_t1', '20_error_t2', '80_error_t2', '20_correct_t2', '80_correct_t2']
+        print(cols)
+        DFANOVA.columns = cols
+        DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-mapping1-timewindow_rmanova.csv'.format(self.exp))) # for stats
         '''
         ######## CORRECT x MAPPING1 ########
         '''
         for pupil_dv in ['reaction_time', 'pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']:
-            # MEANS subject x bin x tone x congruent
             DFOUT = DF.groupby(['subject','correct','mapping1'])[pupil_dv].mean()
             DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-mapping1_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
             # save for RMANOVA format
@@ -879,3 +906,85 @@ class higherLevel(object):
            plt.tight_layout()
            fig.savefig(os.path.join(self.figure_folder,'{}_frequency_individual_differences_{}.pdf'.format(self.exp, pupil_dv)))
        print('success: individual_differences')
+
+
+    def confound_rt_pupil(self,):
+        # single-trial correlation between RT and pupil_dvs, subject and group level
+        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']
+        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
+        for sp, pupil_dv in enumerate(dvs):
+
+            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+            
+            ############################
+            # drop outliers
+            DF = DF[DF['outlier_rt']==0]
+            ############################
+
+            plot_subject = np.random.randint(0, len(self.subjects)) # plot random subject
+            save_coeff = []
+            for s, subj in enumerate(np.unique(DF['subject'])):
+                this_df = DF[DF['subject']==subj].copy()
+
+                x = np.array(this_df['reaction_time'])
+                y = np.array(this_df[pupil_dv])  
+                r,pval = stats.pearsonr(x,y)
+                save_coeff.append(self.fisher_transform(r))
+                
+                if s==plot_subject:  # plot one random subject
+                    fig = plt.figure(figsize=(2,2))
+                    ax = fig.add_subplot(111)
+                    ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
+                    m, b = np.polyfit(x, y, 1)
+                    ax.plot(x, m*x+b, color='grey',alpha=1)
+                    # set figure parameters
+                    ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
+                    ax.set_ylabel(pupil_dv)
+                    ax.set_xlabel('RT (s)')
+                    # ax.legend()
+                    plt.tight_layout()
+                    fig.savefig(os.path.join(self.figure_folder,'{}_confound_RT_{}.pdf'.format(self.exp, pupil_dv)))
+            DFOUT[pupil_dv] = np.array(save_coeff)
+        DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_RT.csv'.format(self.exp)))
+    print('success: confound_rt_pupil')
+
+
+    def confound_baseline_phasic(self,):
+        # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
+        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2']
+        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
+        for sp, pupil_dv in enumerate(dvs):
+
+            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+            
+            ############################
+            # drop outliers
+            DF = DF[DF['outlier_rt']==0]
+            ############################
+
+            plot_subject = np.random.randint(0,len(self.subjects)) # plot random subject
+            save_coeff = []
+            for s, subj in enumerate(np.unique(DF['subject'])):
+                this_df = DF[DF['subject']==subj].copy()
+
+                x = np.array(this_df['pupil_baseline_target_locked'])
+                y = np.array(this_df[pupil_dv])  
+                r,pval = stats.pearsonr(x,y)
+                save_coeff.append(self.fisher_transform(r))
+                
+                if s==plot_subject:  # plot one random subject
+                    fig = plt.figure(figsize=(2,2))
+                    ax = fig.add_subplot(111)
+                    ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
+                    m, b = np.polyfit(x, y, 1)
+                    ax.plot(x, m*x+b, color='grey',alpha=1)
+                    # set figure parameters
+                    ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
+                    ax.set_ylabel(pupil_dv)
+                    ax.set_xlabel('pupil_baseline_feed_locked')
+                    # ax.legend()
+                    plt.tight_layout()
+                    fig.savefig(os.path.join(self.figure_folder,'{}_confound_baseline_phasic_{}.pdf'.format(self.exp, pupil_dv)))
+            DFOUT[pupil_dv] = np.array(save_coeff)
+        DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_baseline_phasic.csv'.format(self.exp)))
+    print('success: confound_baseline_phasic')

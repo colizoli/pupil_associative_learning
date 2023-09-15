@@ -732,19 +732,14 @@ class pupilPreprocess(object):
         # (timeseries/median*100)-100 # alternative to mean
         # normalize each block separately because subjects moved their heads, then concatenate again
         
-        pupil_psc = [] # to be concatenated
-        for BLOCK,this_pupil in enumerate(self.pupil_blocks):
-            this_pupil = np.array(this_pupil)
-            this_base = np.array(self.baseline_blocks[BLOCK])
-            if self.add_base: # did not regress out blinks/saccades            
-                this_pupil = this_pupil + this_base.mean() # need to add back mean
-            pupil_psc.append( (this_pupil/np.mean(this_pupil)*100)-100 )
-        # concantenate
-        self.pupil_psc = np.concatenate(pupil_psc)
-        if len(self.pupil_psc) == len(self.pupil):
-            print('CORRECT LENGTH')
-        self.pupil = self.pupil_psc
+        if self.add_base: # did not regress out blinks/saccades
+            self.pupil_psc = self.pupil + self.pupil_baseline.mean()
+        else:
+            self.pupil_psc = deepcopy(self.pupil)
+            
+        self.pupil_psc = (self.pupil_psc/np.mean(self.pupil_psc)*100)-100 
         print('pupil converted percent signal change')
+        
         
     def plot_pupil(self,):               
         # plots the pupil in all stages

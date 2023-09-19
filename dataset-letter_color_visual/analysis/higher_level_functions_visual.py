@@ -82,8 +82,7 @@ class higherLevel(object):
         self.pupil_step_lim     = pupil_step_lim                
         self.baseline_window    = baseline_window              
         self.pupil_time_of_interest = pupil_time_of_interest
-        self.downsample_rate    = 20 # 20 Hz
-        self.downsample_factor  = self.sample_rate / self.downsample_rate
+
     
     def tsplot(self, ax, data, alpha_fill=0.2, alpha_line=1, **kw):
         # replacing seaborn tsplot
@@ -376,7 +375,7 @@ class higherLevel(object):
         ylim = [ 
             [-1.5,6.5], # t1
             [-3.25,2.25], # t2
-            [-3, 4], # baseline
+            [-3, 5], # baseline
             [0.6,1.5] # RT
         ]
         tick_spacer = [1, 1, 2, .2]

@@ -20,6 +20,7 @@ import preprocessing_functions_visual as pupil_preprocessing
 import higher_level_functions_visual as higher
 # conda install matplotlib # fixed the matplotlib crashing error in 3.6
 from IPython import embed as shell # for debugging
+# Need to have the EYELINK software installed on the terminal
 
 # -----------------------
 # Levels
@@ -141,11 +142,11 @@ if higher_level:
     ''' Note: the functions after this are using: task-letter_color_visual_decision_subjects.csv
     '''
     # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
-    # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
+    higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
     # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
     # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
     # higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
-    higherLevel.confound_baseline_phasic()       # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
+    # higherLevel.confound_baseline_phasic()       # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
     
     ''' Evoked pupil response
     '''

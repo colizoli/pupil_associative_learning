@@ -852,6 +852,7 @@ class trials(object):
         if not os.path.isdir(self.figure_folder):
             os.mkdir(self.figure_folder)
     
+    
     def event_related_subjects(self,pupil_dv):
         # Cuts out time series of pupil data locked to time points of interest
         # Saves events as numpy arrays per subject in dataframe folder/subjects per event of interest
@@ -886,6 +887,7 @@ class trials(object):
             SAVE_TRIALS.to_csv(os.path.join(self.project_directory,'{}_{}_evoked.csv'.format(self.alias,time_locked)))
             print('subject {}, {} events extracted'.format(self.subject,time_locked))
         print('sucess: event_related_subjects')
+    
     
     def event_related_baseline_correction(self):
         # Baseline correction on evoked responses, saves baseline pupil in behav log file

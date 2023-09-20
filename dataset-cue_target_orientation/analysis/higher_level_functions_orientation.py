@@ -408,6 +408,9 @@ class higherLevel(object):
             DFANOVA =  DFOUT.unstack(['mapping1','correct']) 
             print(DFANOVA.columns)
             DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+            cols = ['20_error', '80_error', '20_correct', '80_correct']
+            print(cols)
+            DFANOVA.columns = cols
             DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-mapping1_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
         '''
         ######## MAPPING1 ########

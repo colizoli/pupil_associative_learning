@@ -129,12 +129,12 @@ if higher_level:
     # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
     # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
     # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
-    # higherLevel.individual_differences()         # individual differences correlation between behavior and pupil
-    higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
-    higherLevel.confound_baseline_phasic()       # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
+    # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
+    # higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
+    # higherLevel.confound_baseline_phasic()     # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
     
     ''' Evoked pupil response
     '''
     # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
      

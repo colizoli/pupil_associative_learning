@@ -647,9 +647,9 @@ class higherLevel(object):
         twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
         ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
             
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -716,9 +716,9 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -779,9 +779,9 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -854,9 +854,9 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')

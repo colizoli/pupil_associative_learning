@@ -657,7 +657,7 @@ class higherLevel(object):
         # plots the group level mean for target_locked
         # plots the group level accuracy x mapping interaction for target_locked
 
-        ylim_feed = [-4,15]
+        ylim_feed = [-3,8]
         tick_spacer = 3
         
         #######################
@@ -707,9 +707,9 @@ class higherLevel(object):
         twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
         ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -775,9 +775,9 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -810,7 +810,7 @@ class higherLevel(object):
         COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)))
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     
-        xticklabels = ['33%','50%','84%']
+        xticklabels = ['20%','40%','80%']
         colorsts = ['indigo','indigo','indigo']
         alpha_fills = [0.2,0.2,0.2] # fill
         alpha_lines = [.3,.6,1.]
@@ -823,11 +823,20 @@ class higherLevel(object):
             self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
             save_conds.append(TS) # for stats
         
+        ### STATS - RM_ANOVA ###
+        # loop over time points, run anova, save F-statistic for cluster correction
+        # first 3 columns are subject, correct, frequency
+        # get pval for the interaction term (last element in res.anova_table)
+        interaction_pvals = np.empty(COND.shape[-1]-3)
+        for timepoint in np.arange(COND.shape[-1]-3):            
+            this_df = COND.iloc[:,:timepoint+4]
+            aovrm = AnovaRM(this_df, str(timepoint), 'subject', within=['frequency'])
+            res = aovrm.fit()
+            interaction_pvals[timepoint] = np.array(res.anova_table)[-1][-1] # last row, last element
+            
         # stats        
-        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
-        pe_difference = save_conds[0]-save_conds[1]
-        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
-
+        self.timeseries_fdr_correction(pvals=interaction_pvals, xind=pd.Series(range(interaction_pvals.shape[-1])), color='black', ax=ax)
+    
         # set figure parameters
         ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
@@ -838,9 +847,9 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -927,10 +936,10 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
             
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
-        ax.set_ylim([-3,8])
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
+        ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
         ax.set_ylabel('Pupil response\n(% signal change)')

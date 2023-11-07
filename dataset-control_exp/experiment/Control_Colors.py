@@ -12,7 +12,7 @@ import random
 import numpy as np
 import pandas as pd
 import os, time  # for paths and data
-from IPython import embed as shell
+# from IPython import embed as shell # for debugging only
 import gpe_params as p
 
 debug_mode = False
@@ -28,7 +28,7 @@ if subject_ID:
 
     ## Create LogFile folder cwd/LogFiles
     cwd = os.getcwd()
-    logfile_dir = os.path.join(cwd,'LogFiles','sub-{}'.format(subject_ID)) 
+    logfile_dir = os.path.join(cwd,'source','sub-{}'.format(subject_ID)) 
     if not os.path.isdir(logfile_dir):
         os.makedirs(logfile_dir)
     

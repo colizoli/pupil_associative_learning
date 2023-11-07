@@ -44,7 +44,7 @@ subject_ID = int(g.data[0])
 
 ## Create LogFile folder cwd/LogFiles
 cwd = os.getcwd()
-logfile_dir = os.path.join(cwd,'LogFiles','sub-{}'.format(subject_ID)) 
+logfile_dir = os.path.join(cwd,'source','sub-{}'.format(subject_ID)) 
 if not os.path.isdir(logfile_dir):
     os.makedirs(logfile_dir)
 
@@ -73,7 +73,7 @@ if subject_ID:
         
     ## output file name with time stamp prevents any overwriting of data
     timestr = time.strftime("%Y%m%d-%H%M%S") 
-    output_filename = os.path.join(logfile_dir,'sub-{}_task-decision_events_{}.csv'.format(subject_ID,timestr ))
+    output_filename = os.path.join(logfile_dir,'sub-{}_task-letter_color_visual_decision_beh_{}.csv'.format(subject_ID, timestr))
     # output dataframe
     cols = ['subject','trial_num','letter','frequency','r','g','b','PBASE','ITI','match','button','correct','RT']
     DF = pd.DataFrame(columns=cols)
@@ -343,7 +343,7 @@ if subject_ID:
     win.flip()
         
     # output mean RT for Control IRF task
-    output_filename = os.path.join(logfile_dir,'sub-{}_task-decision_meanRT_{}.csv'.format(subject_ID,timestr))
+    output_filename = os.path.join(logfile_dir,'sub-{}_task-letter_color_visual_decision_meanRT_{}.csv'.format(subject_ID,timestr))
     cols = ['subject','meanRT']
     DF2 = pd.DataFrame(columns=cols)
     DF2.loc[0] = [int(subject_ID),np.nanmean(np.array(DF['RT']))]

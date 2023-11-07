@@ -1,7 +1,7 @@
 """
 Training task, gradient prediction errors
 """
-# data saved in ~/LogFiles/sub-XXX
+# data saved in ~/source/sub-XXX
 
 
 # Import necessary modules

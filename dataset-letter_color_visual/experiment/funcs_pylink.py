@@ -12,7 +12,7 @@ import pylink, numpy, os, time
 from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy # this file needs to be in experiment directory
 from psychopy import visual, core, event, monitors
 from PIL import Image
-from IPython import embed as shell
+# from IPython import embed as shell # only for debugging
 
 global tk,dataFileName,dataFolder
 tk = None
@@ -126,7 +126,7 @@ def stop_recording(timestr):
     tk.closeDataFile()
     pylink.pumpDelay(50)
     # rename file upon transfer
-    original_name = os.path.splitext(dataFileName)
+    original_name = os.path.splitext(dataFileName) # str(subject_ID)+".EDF"
     # sub-xxx_task-letter_color_visual_decision_recording-eyetracking_physio_timestring.EDF
     new_name = 'sub-'+ original_name[0] +'_task-letter_color_visual_decision_recording-eyetracking_physio_' + timestr + original_name[1]  
     tk.receiveDataFile(dataFileName, os.path.join(dataFolder, new_name))

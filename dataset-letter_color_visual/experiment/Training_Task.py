@@ -42,7 +42,7 @@ subject_ID = int(g.data[0])
 
 ## Create LogFile folder cwd/LogFiles
 cwd = os.getcwd()
-logfile_dir = os.path.join(cwd,'LogFiles','sub-{}'.format(subject_ID)) 
+logfile_dir = os.path.join(cwd,'source','sub-{}'.format(subject_ID)) 
 if not os.path.isdir(logfile_dir):
     os.makedirs(logfile_dir)
 
@@ -84,7 +84,7 @@ if subject_ID:
         
     ## output file name with time stamp prevents any overwriting of data
     timestr = time.strftime("%Y%m%d-%H%M%S") 
-    output_filename = os.path.join(logfile_dir,'sub-{}_task-training_events_{}.csv'.format(subject_ID,timestr ))
+    output_filename = os.path.join(logfile_dir,'sub-{}_task-letter_color_visual_training_beh_{}.csv'.format(subject_ID,timestr ))
     # output dataframe
     cols = ['subject','trial_num','letter','frequency','r','g','b','ITI','oddball','button','correct','RT']
     DF = pd.DataFrame(columns=cols)

@@ -8,7 +8,7 @@ Decision task, gradient prediction errors
 # phase 5 response made
 # phase 6 pupil baseline feedback
 # phase 7 feedback onset
-# data saved in ~/LogFiles/sub-XXX
+# data saved in ~/source/sub-XXX
 
 # Import necessary modules
 from psychopy import core, visual, event, data, sound, gui, monitors

@@ -1,5 +1,15 @@
 #!/usr/bin/env python
-# encoding: utf-8
+# -*- coding: utf-8 -*-
+"""
+================================================
+Used in: Pupil dilation offers a time window on prediction error
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
+Python 3.6
+
+Adapted from: General Linear Model Functions
+Python code c/o Jan Willem de Gee (https://github.com/jwdegee)
+================================================
+"""
 
 from __future__ import division
 

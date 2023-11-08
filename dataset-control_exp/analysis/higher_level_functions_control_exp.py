@@ -1,9 +1,17 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-Analysis gradient prediction errors - control task, mean responses and higher level analyses
-Colors & Sounds
-O.Colizoli 2023
+================================================
+Pupil dilation offers a time-window in prediction error
+
+Control Experiment - Higher Level Functions
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
+Python 3.6
+
+Notes
+-----
+>>> conda install -c conda-forge/label/gcc7 mne
+================================================
 """
 
 import os, sys, datetime
@@ -16,26 +24,34 @@ import seaborn as sns
 import pandas as pd
 import mne
 import re
-
-#conda install -c conda-forge/label/gcc7 mne
 from copy import deepcopy
 import itertools
-# import pingouin as pg # stats package
-# from pingouin import pairwise_ttests
+from IPython import embed as shell # for debugging only
 
-from IPython import embed as shell
 
-# import pupil_control # for cluster plotting function
+""" Plotting Format
+############################################
+# PLOT SIZES: (cols,rows)
+# a single plot, 1 row, 1 col (2,2)
+# 1 row, 2 cols (2*2,2*1)
+# 2 rows, 2 cols (2*2,2*2)
+# 2 rows, 3 cols (2*3,2*2)
+# 1 row, 4 cols (2*4,2*1)
+# Nsubjects rows, 2 cols (2*2,Nsubjects*2)
 
+############################################
+# Define parameters
+############################################
+"""
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'axes.linewidth': 1, 
     'axes.labelsize': 7, 
     'axes.titlesize': 7, 
-    'xtick.labelsize': 6, 
-    'ytick.labelsize': 6, 
-    'legend.fontsize': 6, 
+    'xtick.labelsize': 7, 
+    'ytick.labelsize': 7, 
+    'legend.fontsize': 7, 
     'xtick.major.width': 1, 
     'ytick.major.width': 1,
     'text.color': 'Black',
@@ -44,11 +60,62 @@ sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'ytick.color':'Black',} )
 sns.plotting_context()
 
-############################################
-# Higher Level Class
-############################################
+
 class higherLevel(object):
+    """Define a class for the higher level analysis.
+
+    Parameters
+    ----------
+    subjects : list
+        List of subject numbers
+    experiment_name : string
+        Name of the experiment for output files
+    project_directory : str
+        Path to the derivatives data directory
+    sample_rate : int
+        Sampling rate of pupil measurements in Hertz
+    time_locked : list
+        List of strings indiciting the events for time locking that should be analyzed (e.g., ['cue_locked','target_locked'])
+    pupil_step_lim : list 
+        List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] )
+    baseline_window : float
+        Number of seconds before each event in self.time_locked that are averaged for baseline correction
+    pupil_time_of_interest : list
+        List of arrays indicating the time windows in seconds in which to average evoked responses, per event in self.time_locked, see in higher.plot_evoked_pupil (e.g., [[1.0,2.0],[1.0,2.0]])
+    colors : list
+        List of colors to use as conditions of interest
+
+    Attributes
+    ----------
+    subjects : list
+        List of subject numbers
+    exp : string
+        Name of the experiment for output files
+    project_directory : str
+        Path to the derivatives data directory
+    figure_folder : str
+        Path to the figure directory
+    dataframe_folder : str
+        Path to the dataframe directory
+    trial_bin_folder : str
+        Path to the trial bin directory for conditions 
+    jasp_folder : str
+        Path to the jasp directory for stats
+    colors : list
+        List of colors to use as conditions of interest
+    sample_rate : int
+        Sampling rate of pupil measurements in Hertz
+    time_locked : list
+        List of strings indiciting the events for time locking that should be analyzed (e.g., ['cue_locked','target_locked'])
+    pupil_step_lim : list 
+        List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] )
+    baseline_window : float
+        Number of seconds before each event in self.time_locked that are averaged for baseline correction
+    """
+    
     def __init__(self, subjects, experiment_name, project_directory, sample_rate, time_locked, pupil_step_lim, baseline_window, pupil_time_of_interest, colors):        
+        """Constructor method
+        """
         self.subjects           = subjects
         self.exp                = experiment_name
         self.project_directory  = project_directory
@@ -57,6 +124,14 @@ class higherLevel(object):
         self.trial_bin_folder   = os.path.join(self.dataframe_folder,'trial_bins_pupil') # for average pupil in different trial bin windows
         self.jasp_folder        = os.path.join(self.dataframe_folder,'jasp') # for dataframes to input into JASP
         self.colors             = colors # determines how to group the conditions
+        ##############################    
+        # Pupil time series information:
+        ##############################
+        self.sample_rate        = sample_rate
+        self.time_locked        = time_locked
+        self.pupil_step_lim     = pupil_step_lim                
+        self.baseline_window    = baseline_window              
+        self.pupil_time_of_interest = pupil_time_of_interest
         
         if not os.path.isdir(self.figure_folder):
             os.mkdir(self.figure_folder)
@@ -69,19 +144,25 @@ class higherLevel(object):
             
         if not os.path.isdir(self.jasp_folder):
             os.mkdir(self.jasp_folder)
-            
-        ##############################    
-        # Pupil time series information:
-        ##############################
-        self.sample_rate        = sample_rate
-        self.time_locked        = time_locked
-        self.pupil_step_lim     = pupil_step_lim                
-        self.baseline_window    = baseline_window              
-        self.pupil_time_of_interest = pupil_time_of_interest
         
         
     def tsplot(self, ax, data, alpha_fill=0.2, alpha_line=1, **kw):
-        # replacing seaborn tsplot
+        """Time series plot replacing seaborn tsplot
+            
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.AxesSubplot
+            The subplot handle to plot in
+
+        data : array
+            The data in matrix of format: subject x timepoints
+
+        alpha_line : int
+            The thickness of the mean line (default 1)
+
+        kw : list
+            Optional keyword arguments for matplotlib.plot().
+        """
         x = np.arange(data.shape[1])
         est = np.mean(data, axis=0)
         sd = np.std(data, axis=0)
@@ -99,7 +180,24 @@ class higherLevel(object):
     
     
     def bootstrap(self, data, n_boot=10000, ci=68):
-        # bootstrap confidence interval for new tsplot
+        """Bootstrap confidence interval for new tsplot.
+        
+        Parameters
+        ----------
+        data : array
+            The data in matrix of format: subject x timepoints
+
+        n_boot : int
+            Number of iterations for bootstrapping
+
+        ci : int
+            Confidence interval range
+
+        Returns
+        -------
+        (s1,s2) : tuple
+            Confidence interval.
+        """
         boot_dist = []
         for i in range(int(n_boot)):
             resampler = np.random.randint(0, data.shape[0], data.shape[0])
@@ -111,9 +209,35 @@ class higherLevel(object):
         return (s1,s2)
 
 
-    # common functions
     def cluster_sig_bar_1samp(self, array, x, yloc, color, ax, threshold=0.05, nrand=5000, cluster_correct=True):
-        # permutation-based cluster correction on time courses, then plots the stats as a bar in yloc
+        """Add permutation-based cluster-correction bar on time series plot.
+        
+        Parameters
+        ----------
+        array : array
+            The data in matrix of format: subject x timepoints
+
+        x : array
+            x-axis of plot
+
+        yloc : int
+            Location on y-axis to draw bar
+
+        color : string
+            Color of bar
+
+        ax : matplotlib.axes._subplots.AxesSubplot
+            The subplot handle to plot in
+
+        threshold : float
+            Alpha value for p-value significance (default 0.05)
+
+        nrand : int 
+            Number of permutations (default 5000)
+
+        cluster_correct : bool 
+            Perform cluster-based multiple comparison correction if True (default True).
+        """
         if yloc == 1:
             yloc = 10
         if yloc == 2:
@@ -154,10 +278,12 @@ class higherLevel(object):
                 
                             
     def higherlevel_get_phasics(self,):
-        # computes phasic pupil in selected time window per trial
-        # adds phasics to behavioral data frame
-        # loop through subjects' log files
+        """Computes phasic pupil (evoked average) in selected time window per trial and add phasics to behavioral data frame. 
         
+        Notes
+        -----
+        Overwrites original log file (this_log).
+        """
         for s,subj in enumerate(self.subjects):
             this_log = os.path.join(self.project_directory,subj, 'beh', '{}_{}_beh.csv'.format(subj, self.exp)) # derivatives folder
             B = pd.read_csv(this_log) # behavioral file
@@ -202,9 +328,13 @@ class higherLevel(object):
 
 
     def create_subjects_dataframe(self, ):
-        # concatenates all subjects into a single dataframe
+        """Combine behavior and phasic pupil dataframes including pupil baselines of all subjects into a single large dataframe. 
         
-        # output all subjects' data
+        Notes
+        -----
+        Flag outliers based on RT (separate column) per subject. 
+        Output in dataframe folder: task-predictions_subjects.csv
+        """
         DF = pd.DataFrame()
         
         # loop through subjects, get behavioral log files
@@ -230,10 +360,13 @@ class higherLevel(object):
         
         
     def average_conditions_colors(self, ):
-        # averages the phasic pupil per subject PER CONDITION 
-        # saves separate dataframes for the different combinations of factors
-        # self.colors argument determines how the trials were split 
-                
+        """Average the DVs per subject per condition of interest. 
+
+        Notes
+        -----
+        self.colors argument determines how the trials were split.
+        Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
+        """
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
         DF.sort_values(by=['subject','trial_num'],inplace=True)
@@ -269,10 +402,15 @@ class higherLevel(object):
     
     
     def dataframe_evoked_pupil_higher_colors(self):
-        # Evoked pupil responses, split by factors and save as higher level dataframe
-        # Need to combine evoked files with behavioral data frame, looping through subjects
-        # DROP OMISSIONS (in subject loop)
+        """Compute evoked pupil responses.
         
+        Notes
+        -----
+        Split by conditions of interest. Save as higher level dataframe per condition of interest. 
+        Evoked dataframes need to be combined with behavioral data frame, looping through subjects. 
+        Drop omission trials (in subject loop).
+        Output in dataframe folder.
+        """
         DF = pd.read_csv(os.path.join(self.dataframe_folder, '{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
         csv_names = deepcopy(['subject', 'colors'])
@@ -312,10 +450,13 @@ class higherLevel(object):
 
 
     def plot_evoked_pupil_higher_colors(self):
-        # plots evoked pupil spanning 2 subplots
-        # plots the group level mean
-        # plots the group level by color
-
+        """Plot evoked pupil time courses.
+        
+        Notes
+        -----
+        2 figures. 
+        Plot the group level mean and then split per color.
+        """
         ylim = [-4,15]
         tick_spacer = 3
         
@@ -370,7 +511,7 @@ class higherLevel(object):
         ax.set_xticks(xticks)
         ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
         # ax.set_ylim(ylim)
-        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from stimulus (s)')
         ax.set_ylabel('Pupil response\n(% signal change)')
         ax.set_title(time_locked)
@@ -428,11 +569,11 @@ class higherLevel(object):
         ax.set_xticks(xticks)
         ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
         # ax.set_ylim(ylim)
-        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from stimulus (s)')
         ax.set_ylabel('Pupil response\n(% signal change)')
         ax.set_title(time_locked)
-        ax.legend(loc='best')
+        # ax.legend(loc='best')
         # whole figure format
         sns.despine(offset=10, trim=True)
         plt.tight_layout()
@@ -441,9 +582,13 @@ class higherLevel(object):
     
     
     def average_conditions_sounds(self, ):
-        # averages the phasic pupil per subject PER CONDITION 
-        # saves separate dataframes for the different combinations of factors
-                
+        """Average the DVs per subject per condition of interest. 
+
+        Notes
+        -----
+        Split by tone factor.
+        Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
+        """       
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
         DF.sort_values(by=['subject','trial_num'],inplace=True)
@@ -474,9 +619,15 @@ class higherLevel(object):
         
     
     def dataframe_evoked_pupil_higher_sounds(self):
-        # Evoked pupil responses, split by factors and save as higher level dataframe
-        # Need to combine evoked files with behavioral data frame, looping through subjects
+        """Compute evoked pupil responses.
         
+        Notes
+        -----
+        Split by conditions of interest. Save as higher level dataframe per condition of interest. 
+        Evoked dataframes need to be combined with behavioral data frame, looping through subjects. 
+        Drop omission trials (in subject loop).
+        Output in dataframe folder.
+        """
         DF = pd.read_csv(os.path.join(self.dataframe_folder, '{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
         csv_names = deepcopy(['subject', 'tone'])
@@ -512,10 +663,13 @@ class higherLevel(object):
     
 
     def plot_evoked_pupil_higher_sounds(self):
-        # plots evoked pupil spanning 2 subplots
-        # plots the group level mean
-        # plots the group level by tone
-
+        """Plot evoked pupil time courses.
+        
+        Notes
+        -----
+        2 figures. 
+        Plot the group level mean and then split per tone.
+        """
         ylim = [-4,15]
         tick_spacer = 3
         
@@ -568,9 +722,9 @@ class higherLevel(object):
 
         xticks = [event_onset,mid_point,end_sample]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([0, np.true_divide(self.pupil_step_lim[t][1],2), self.pupil_step_lim[t][1]])
         # ax.set_ylim(ylim)
-        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from stimulus (s)')
         ax.set_ylabel('Pupil response\n(% signal change)')
         ax.set_title(time_locked)
@@ -635,7 +789,7 @@ class higherLevel(object):
         ax.set_xticks(xticks)
         ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
         # ax.set_ylim(ylim)
-        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from stimulus (s)')
         ax.set_ylabel('Pupil response\n(% signal change)')
         ax.set_title(time_locked)

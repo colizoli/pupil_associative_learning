@@ -1,31 +1,32 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# LISA VERSION
+# encoding: utf-8
 """
-Analysis control experiment - Colors, pupillometry
-O.Colizoli 2019
-python 3.6
+================================================
+Pupil dilation offers a time-window in prediction error
+
+Control Experiment - RUN ANALYSIS HERE
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
+Python 3.6
+
+Notes
+-----
+>> conda install matplotlib # fixed the matplotlib crashing error in 3.6
+================================================
 """
 
-############################################################################
-# PUPIL ANALYSES
-############################################################################
-# importing python packages
 import os, sys, datetime, time
 import numpy as np
 import pandas as pd
 import preprocessing_functions_control_exp as pupil_preprocessing
 import higher_level_functions_control_exp as higher
-# conda install matplotlib # fixed the matplotlib crashing error in 3.6
-
 from IPython import embed as shell # for debugging
 
 # -----------------------
-# Levels
+# Levels (toggle True/False)
 # ----------------------- 
-pre_process     = False
-trial_process   = False
-higher_level    = True
+pre_process     = False # pupil preprocessing is done on entire time series
+trial_process   = False # cut out events for each trial and calculate trial-wise baselines, baseline correct evoked responses
+higher_level    = False # all subjects' dataframe, pupil and behavior higher level analyses & figures
 
 # -----------------------
 # Paths
@@ -45,7 +46,7 @@ else:
 # -----------------------
 # Participants
 # -----------------------
-ppns     = pd.read_csv(os.path.join(home_dir,'derivatives','participants.csv'))
+ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants.csv'))
 subjects = ['sub-{}'.format(s) for s in ppns['subject']]
 
 # -----------------------
@@ -126,7 +127,7 @@ if trial_process:
     for experiment_name in control_experiments:
         # process 1 subject at a time
         for s,subj in enumerate(subjects):
-            edf = '{}_{}_recording-eyetracking_physio'.format(subj,experiment_name)
+            edf = '{}_{}_recording-eyetracking_physio'.format(subj, experiment_name)
             trialLevel = pupil_preprocessing.trials(
                 subject             = subj,
                 edf                 = edf,
@@ -157,10 +158,10 @@ if higher_level:
         pupil_time_of_interest  = pupil_time_of_interest, # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
         colors                  = colors   # determines how to group the conditions
         )
-    # higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
-    # higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
-    # higherLevel.average_conditions_colors()           # averages dvs in conditions of interest
-    # higherLevel.dataframe_evoked_pupil_higher_colors()  # averages evoked pupil responses by conditions of interest
+    higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
+    higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
+    higherLevel.average_conditions_colors()           # averages dvs in conditions of interest
+    higherLevel.dataframe_evoked_pupil_higher_colors()  # averages evoked pupil responses by conditions of interest
     higherLevel.plot_evoked_pupil_higher_colors()       # averages evoked pupil responses by conditions of interest
     
         
@@ -175,9 +176,9 @@ if higher_level:
         pupil_time_of_interest  = pupil_time_of_interest, # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
         colors                  = colors                  # determines how to group the conditions
         )
-    # higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
-    # higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
-    # higherLevel.average_conditions_sounds()           # averages dvs in conditions of interest
-    # higherLevel.dataframe_evoked_pupil_higher_sounds()  # averages evoked pupil responses by conditions of interest
+    higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
+    higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
+    higherLevel.average_conditions_sounds()           # averages dvs in conditions of interest
+    higherLevel.dataframe_evoked_pupil_higher_sounds()  # averages evoked pupil responses by conditions of interest
     higherLevel.plot_evoked_pupil_higher_sounds()       # averages evoked pupil responses by conditions of interest
         

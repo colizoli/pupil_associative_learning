@@ -25,16 +25,23 @@ from IPython import embed as shell # for debugging
 # ----------------------- 
 pre_process     = False
 trial_process   = False
-higher_level    = False
+higher_level    = True
 
 # -----------------------
 # Paths
 # ----------------------- 
 # set path to home directory
 home_dir        = os.path.dirname(os.getcwd()) # one level up from analysis folder
+source_dir      = os.path.join(home_dir, 'raw')
 data_dir        = os.path.join(home_dir, 'derivatives') # copy source directory and rename
 control_experiments = ['task-control_exp_colors', 'task-control_exp_sounds'] # experiment_name
 
+# copy 'raw' to derivatives if it doesn't exist:
+if not os.path.isdir(data_dir):
+    shutil.copytree(source_dir, data_dir) 
+else:
+    print('Derivatives directory exists. Continuing...')
+    
 # -----------------------
 # Participants
 # -----------------------
@@ -150,10 +157,10 @@ if higher_level:
         pupil_time_of_interest  = pupil_time_of_interest, # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
         colors                  = colors   # determines how to group the conditions
         )
-    higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
-    higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
-    higherLevel.average_conditions_colors()           # averages dvs in conditions of interest
-    higherLevel.dataframe_evoked_pupil_higher_colors()  # averages evoked pupil responses by conditions of interest
+    # higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
+    # higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
+    # higherLevel.average_conditions_colors()           # averages dvs in conditions of interest
+    # higherLevel.dataframe_evoked_pupil_higher_colors()  # averages evoked pupil responses by conditions of interest
     higherLevel.plot_evoked_pupil_higher_colors()       # averages evoked pupil responses by conditions of interest
     
         
@@ -168,9 +175,9 @@ if higher_level:
         pupil_time_of_interest  = pupil_time_of_interest, # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
         colors                  = colors                  # determines how to group the conditions
         )
-    higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
-    higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
-    higherLevel.average_conditions_sounds()           # averages dvs in conditions of interest
-    higherLevel.dataframe_evoked_pupil_higher_sounds()  # averages evoked pupil responses by conditions of interest
+    # higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
+    # higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
+    # higherLevel.average_conditions_sounds()           # averages dvs in conditions of interest
+    # higherLevel.dataframe_evoked_pupil_higher_sounds()  # averages evoked pupil responses by conditions of interest
     higherLevel.plot_evoked_pupil_higher_sounds()       # averages evoked pupil responses by conditions of interest
         

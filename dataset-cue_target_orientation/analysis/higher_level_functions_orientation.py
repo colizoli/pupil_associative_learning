@@ -1,10 +1,17 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-Cues probabilistically indicate the orientation direction of the target stimulus
-"Cue-target orientation 2AFC task" for short
-Python code by O.Colizoli 2022
+================================================
+Pupil dilation offers a time-window in prediction error
+
+Data set #1 Cue-target orientation 2AFC task - Higher Level Functions
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
 Python 3.6
+
+Notes
+-----
+>>> conda install -c conda-forge/label/gcc7 mne
+================================================
 """
 
 import os, sys, datetime
@@ -16,12 +23,23 @@ import pandas as pd
 import mne
 import scipy as sp
 import scipy.stats as stats
-
-#conda install -c conda-forge/label/gcc7 mne
 from copy import deepcopy
-
 from IPython import embed as shell # used for debugging
 
+""" Plotting Format
+############################################
+# PLOT SIZES: (cols,rows)
+# a single plot, 1 row, 1 col (2,2)
+# 1 row, 2 cols (2*2,2*1)
+# 2 rows, 2 cols (2*2,2*2)
+# 2 rows, 3 cols (2*3,2*2)
+# 1 row, 4 cols (2*4,2*1)
+# Nsubjects rows, 2 cols (2*2,Nsubjects*2)
+
+############################################
+# Define parameters
+############################################
+"""
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 sns.set(style='ticks', font='Arial', font_scale=1, rc={
@@ -39,34 +57,78 @@ sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'ytick.color':'Black',} )
 sns.plotting_context()
 
-############################################
-# PLOT SIZES: (cols,rows)
-# a single plot, 1 row, 1 col (2,2)
-# 1 row, 2 cols (2*2,2*1)
-# 2 rows, 2 cols (2*2,2*2)
-# 2 rows, 3 cols (2*3,2*2)
-# 1 row, 4 cols (2*4,2*1)
-# Nsubjects rows, 2 cols (2*2,Nsubjects*2)
-
-############################################
-# Define parameters
-############################################
 
 class higherLevel(object):
+    """Define a class for the higher level analysis.
+
+    Parameters
+    ----------
+    subjects : list
+        List of subject numbers
+    group : int or boolean
+        Indicating group 0 (flipped) or 1 (normal order) for the counterbalancing of the mapping conditions
+    experiment_name : string
+        Name of the experiment for output files
+    project_directory : str
+        Path to the derivatives data directory
+    sample_rate : int
+        Sampling rate of pupil measurements in Hertz
+    time_locked : list
+        List of strings indiciting the events for time locking that should be analyzed (e.g., ['cue_locked','target_locked'])
+    pupil_step_lim : list 
+        List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] )
+    baseline_window : float
+        Number of seconds before each event in self.time_locked that are averaged for baseline correction
+    pupil_time_of_interest : list
+        List of arrays indicating the time windows in seconds in which to average evoked responses, per event in self.time_locked, see in higher.plot_evoked_pupil (e.g., [[1.0,2.0],[1.0,2.0]])
+
+    Attributes
+    ----------
+    subjects : list
+        List of subject numbers
+    group : int or boolean
+        Indicating group 0 (flipped) or 1 (normal order) for the counterbalancing of the mapping conditions
+    exp : string
+        Name of the experiment for output files
+    project_directory : str
+        Path to the derivatives data directory
+    figure_folder : str
+        Path to the figure directory
+    dataframe_folder : str
+        Path to the dataframe directory
+    trial_bin_folder : str
+        Path to the trial bin directory for conditions 
+    jasp_folder : str
+        Path to the jasp directory for stats
+    sample_rate : int
+        Sampling rate of pupil measurements in Hertz
+    time_locked : list
+        List of strings indiciting the events for time locking that should be analyzed (e.g., ['cue_locked','target_locked'])
+    pupil_step_lim : list 
+        List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] )
+    baseline_window : float
+        Number of seconds before each event in self.time_locked that are averaged for baseline correction
+    pupil_time_of_interest : list
+        List of arrays indicating the time windows in seconds in which to average evoked responses, per event in self.time_locked, see in higher.plot_evoked_pupil (e.g., [[1.0,2.0],[1.0,2.0]])
+    
+    """
+    
     def __init__(self, subjects, group, experiment_name, project_directory, sample_rate, time_locked, pupil_step_lim, baseline_window, pupil_time_of_interest):        
+        """Constructor method
+        """
         self.subjects = subjects
         self.group = group
         self.exp = experiment_name
         self.project_directory = project_directory
         self.figure_folder = os.path.join(project_directory, 'figures')
         self.dataframe_folder = os.path.join(project_directory, 'data_frames')
+        self.trial_bin_folder = os.path.join(self.dataframe_folder,'trial_bins_pupil') # for average pupil in different trial bin windows
+        self.jasp_folder = os.path.join(self.dataframe_folder,'jasp') # for dataframes to input into JASP
         self.sample_rate = sample_rate
         self.time_locked = time_locked
         self.pupil_step_lim = pupil_step_lim                
         self.baseline_window = baseline_window              
         self.pupil_time_of_interest = pupil_time_of_interest
-        self.trial_bin_folder = os.path.join(self.dataframe_folder,'trial_bins_pupil') # for average pupil in different trial bin windows
-        self.jasp_folder = os.path.join(self.dataframe_folder,'jasp') # for dataframes to input into JASP
         
         if not os.path.isdir(self.figure_folder):
             os.mkdir(self.figure_folder)
@@ -79,16 +141,25 @@ class higherLevel(object):
             
         if not os.path.isdir(self.jasp_folder):
             os.mkdir(self.jasp_folder)
-            
-        ##############################    
-        # Pupil time series information:
-        ##############################
-        self.downsample_rate = 20 # 20 Hz
-        self.downsample_factor = self.sample_rate / self.downsample_rate 
         
         
     def tsplot(self, ax, data, alpha_fill=0.2,alpha_line=1, **kw):
-        # replacing seaborn tsplot
+        """Time series plot replacing seaborn tsplot
+            
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.AxesSubplot
+            The subplot handle to plot in
+
+        data : array
+            The data in matrix of format: subject x timepoints
+
+        alpha_line : int
+            The thickness of the mean line (default 1)
+
+        kw : list
+            Optional keyword arguments for matplotlib.plot().
+        """
         x = np.arange(data.shape[1])
         est = np.mean(data, axis=0)
         sd = np.std(data, axis=0)
@@ -105,7 +176,24 @@ class higherLevel(object):
     
     
     def bootstrap(self, data, n_boot=10000, ci=68):
-        # bootstrap confidence interval for new tsplot
+        """Bootstrap confidence interval for new tsplot.
+        
+        Parameters
+        ----------
+        data : array
+            The data in matrix of format: subject x timepoints
+
+        n_boot : int
+            Number of iterations for bootstrapping
+
+        ci : int
+            Confidence interval range
+
+        Returns
+        -------
+        (s1,s2) : tuple
+            Confidence interval.
+        """
         boot_dist = []
         for i in range(int(n_boot)):
             resampler = np.random.randint(0, data.shape[0], data.shape[0])
@@ -119,7 +207,34 @@ class higherLevel(object):
         
     # common functions
     def cluster_sig_bar_1samp(self,array, x, yloc, color, ax, threshold=0.05, nrand=5000, cluster_correct=True):
-        # permutation-based cluster correction on time courses, then plots the stats as a bar in yloc
+        """Add permutation-based cluster-correction bar on time series plot.
+        
+        Parameters
+        ----------
+        array : array
+            The data in matrix of format: subject x timepoints
+
+        x : array
+            x-axis of plot
+
+        yloc : int
+            Location on y-axis to draw bar
+
+        color : string
+            Color of bar
+
+        ax : matplotlib.axes._subplots.AxesSubplot
+            The subplot handle to plot in
+
+        threshold : float
+            Alpha value for p-value significance (default 0.05)
+
+        nrand : int 
+            Number of permutations (default 5000)
+
+        cluster_correct : bool 
+            Perform cluster-based multiple comparison correction if True (default True).
+        """
         if yloc == 1:
             yloc = 10
         if yloc == 2:
@@ -158,6 +273,7 @@ class higherLevel(object):
             for sig in s_bar:
                 ax.hlines(((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0], x[int(sig[0])]-(np.diff(x)[0] / 2.0), x[int(sig[1])]+(np.diff(x)[0] / 2.0), color=color, alpha=1, linewidth=2.5)
     
+    
     def fisher_transform(self,r):
         """Compute Fisher transform on correlation coefficient.
         
@@ -175,8 +291,7 @@ class higherLevel(object):
         
         
     def higherlevel_log_conditions(self,):
-        # for each LOG file for each subject, computes mappings, accuracy, RT outliers (3 STD group level)
-        # note it was not possible to miss a trial
+        """For each LOG file for each subject, computes mappings, accuracy, RT outliers (3 STD group level)
 
         #############
         # ACCURACY COMPUTATIONS
@@ -190,6 +305,11 @@ class higherLevel(object):
         # phase1 = np.arange(1,201) # excluding 201
         # phase2 = np.arange(201,401) # excluding 401
         
+        Notes
+        -----
+        It was not possible to miss a trial (no max response window).
+        Overwrites original log file (this_log).
+        """
         # normal congruency phase1: combinations of cue, tone and target:
         mapping1 = ['0_True_45','0_False_45','45_True_315','45_False_315']
         mapping2 = ['0_True_315','0_False_315','45_True_45','45_False_45']
@@ -270,10 +390,12 @@ class higherLevel(object):
        
        
     def higherlevel_get_phasics(self,):
-        # computes phasic pupil in selected time window per trial
-        # adds phasics to behavioral data frame
-        # loop through subjects' log files
+        """Computes phasic pupil (evoked average) in selected time window per trial and add phasics to behavioral data frame. 
         
+        Notes
+        -----
+        Overwrites original log file (this_log).
+        """
         for s,subj in enumerate(self.subjects):
             this_log = os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)) # derivatives folder
             B = pd.read_csv(this_log) # behavioral file
@@ -317,12 +439,15 @@ class higherLevel(object):
         
                 
     def create_subjects_dataframe(self,):
-        # combine behavior + phasic pupil dataframes ALL SUBJECTS
-        # adds target_locked baselines to dataframe
-        # flags outliers based on RT (separate column) per subject
-        # drops phase 2 trials
-        # output in dataframe folder: task-predictions_subjects.csv
-                
+        """Combine behavior and phasic pupil dataframes including pupil baselines of all subjects into a single large dataframe. 
+        
+        Notes
+        -----
+        Drops phase 2 trials.
+        Adds target_locked baselines to dataframe.
+        Flag outliers based on RT (+-3 STD, separate column) per subject. 
+        Output in dataframe folder: task-predictions_subjects.csv
+        """     
         DF = pd.DataFrame() # ALL SUBJECTS phasic pupil + behavior 
         
         # loop through subjects, get behavioral log files
@@ -371,10 +496,12 @@ class higherLevel(object):
 
 
     def average_conditions(self,):
-        # averages the phasic pupil per subject PER CONDITION 
-        # drops outliers
-        # saves separate dataframes for the different combinations of factors
-        
+        """Average the DVs per subject per condition of interest. 
+
+        Notes
+        -----
+        Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
+        """
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
         DF.sort_values(by=['subject','trial_counter'],inplace=True)
@@ -427,9 +554,14 @@ class higherLevel(object):
         
         
     def plot_phasic_pupil_pe(self,):
-        # Phasic pupil target_locked interaction frequency and accuracy, only phase 1
-        # GROUP LEVEL DATA
-        # separate lines for correct, x-axis is mapping conditions
+        """Plot the phasic pupil target_locked interaction frequency and accuracy.
+
+        Notes
+        -----
+        GROUP LEVEL DATA
+        Separate lines for correct, x-axis is frequency (mapping) conditions.
+        Figure output as PDF in figure folder.
+        """
         ylim = [ 
             [-3.25, 2.25], # t1
             [-3.25, 2.25], # t2
@@ -487,12 +619,14 @@ class higherLevel(object):
         
 
     def plot_behavior(self, ):
-        # plots the group level means of accuracy and RT per mapping condition
-        # whole figure, 2 subplots
-        
-        #######################
-        # Mapping1
-        #######################
+        """Plot the group level means of accuracy and RT per frequency (mapping) condition.
+
+        Notes
+        -----
+        2 figures, GROUP LEVEL DATA
+        x-axis is frequency conditions.
+        Figure output as PDF in figure folder.
+        """
         dvs = ['correct','reaction_time']
         ylabels = ['Accuracy', 'RT (s)']
         factor = 'mapping1'
@@ -543,14 +677,155 @@ class higherLevel(object):
             plt.tight_layout()
             fig.savefig(os.path.join(self.figure_folder,'{}_mapping1_{}.pdf'.format(self.exp, pupil_dv)))
         print('success: plot_behav')
-    
 
-    def dataframe_evoked_pupil_higher(self):
-        # Evoked pupil responses, split by self.factors and save as higher level dataframe
-        # Need to combine evoked files with behavioral data frame, looping through subjects
-        # DROP OMISSIONS (in subject loop)
-        # DROP PHASE 2 trials
+    
+    def individual_differences(self,):
+       """Correlate frequency effect in pupil DV with frequency effect in accuracy across participants, then plot.
+       
+       Notes
+       -----
+       3 figures: 1 per pupil DV
+       """
+       dvs = ['pupil_target_locked_t1','pupil_target_locked_t2', 'pupil_baseline_target_locked']
+              
+       for sp,pupil_dv in enumerate(dvs):
+           fig = plt.figure(figsize=(2,2))
+           ax = fig.add_subplot(111) # 1 subplot per bin window
+           
+           B = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_correct_rmanova.csv'.format(self.exp)))
+           P = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_{}_rmanova.csv'.format(self.exp, pupil_dv)))
+
+           # frequency effect
+           P['main_effect_freq'] = (P['1']-P['0']) # mapping1=1 is 80% condition
+           B['main_effect_freq'] = (B['1']-B['0']) # fraction correct
+           
+           x = np.array(B['main_effect_freq'])
+           y = np.array(P['main_effect_freq'])           
+           # all subjects
+           r,pval = stats.spearmanr(x,y)
+           print('all subjects')
+           print(pupil_dv)
+           print('r={}, p-val={}'.format(r,pval))
+
+           # all subjects
+           ax.plot(x, y, 'o', markersize=3, color='green') # marker, line, black
+           m, b = np.polyfit(x, y, 1)
+           ax.plot(x, m*x+b, color='green',alpha=.5, label='all participants')
+           
+           # set figure parameters
+           ax.set_title('r={}, p-val={}'.format(np.round(r,2),np.round(pval,3)))
+           ax.set_ylabel('{} (80%-20%)'.format(pupil_dv))
+           ax.set_xlabel('accuracy (80%-20%)')
+           # ax.legend()
+           
+           plt.tight_layout()
+           fig.savefig(os.path.join(self.figure_folder,'{}_frequency_individual_differences_{}.pdf'.format(self.exp, pupil_dv)))
+       print('success: individual_differences')
+
+
+    def confound_rt_pupil(self,):
+        """Compute single-trial correlation between RT and pupil_dvs, subject and group level
+       
+        Notes
+        -----
+        Plots a random subject.
+        """
+        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']
+        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
+        for sp, pupil_dv in enumerate(dvs):
+
+            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+            
+            ############################
+            # drop outliers
+            DF = DF[DF['outlier_rt']==0]
+            ############################
+
+            plot_subject = np.random.randint(0, len(self.subjects)) # plot random subject
+            save_coeff = []
+            for s, subj in enumerate(np.unique(DF['subject'])):
+                this_df = DF[DF['subject']==subj].copy()
+
+                x = np.array(this_df['reaction_time'])
+                y = np.array(this_df[pupil_dv])  
+                r,pval = stats.pearsonr(x,y)
+                save_coeff.append(self.fisher_transform(r))
+                
+                if s==plot_subject:  # plot one random subject
+                    fig = plt.figure(figsize=(2,2))
+                    ax = fig.add_subplot(111)
+                    ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
+                    m, b = np.polyfit(x, y, 1)
+                    ax.plot(x, m*x+b, color='grey',alpha=1)
+                    # set figure parameters
+                    ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
+                    ax.set_ylabel(pupil_dv)
+                    ax.set_xlabel('RT (s)')
+                    # ax.legend()
+                    plt.tight_layout()
+                    fig.savefig(os.path.join(self.figure_folder,'{}_confound_RT_{}.pdf'.format(self.exp, pupil_dv)))
+            DFOUT[pupil_dv] = np.array(save_coeff)
+        DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_RT.csv'.format(self.exp)))
+        print('success: confound_rt_pupil')
+
+
+    def confound_baseline_phasic(self,):
+        """Compute single-trial correlation between feedback_baseline and phasic t1 and t2.
+       
+        Notes
+        -----
+        Plots a random subject.
+        """
+        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2']
+        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
+        for sp, pupil_dv in enumerate(dvs):
+
+            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+            
+            ############################
+            # drop outliers
+            DF = DF[DF['outlier_rt']==0]
+            ############################
+
+            plot_subject = np.random.randint(0,len(self.subjects)) # plot random subject
+            save_coeff = []
+            for s, subj in enumerate(np.unique(DF['subject'])):
+                this_df = DF[DF['subject']==subj].copy()
+
+                x = np.array(this_df['pupil_baseline_target_locked'])
+                y = np.array(this_df[pupil_dv])  
+                r,pval = stats.pearsonr(x,y)
+                save_coeff.append(self.fisher_transform(r))
+                
+                if s==plot_subject:  # plot one random subject
+                    fig = plt.figure(figsize=(2,2))
+                    ax = fig.add_subplot(111)
+                    ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
+                    m, b = np.polyfit(x, y, 1)
+                    ax.plot(x, m*x+b, color='grey',alpha=1)
+                    # set figure parameters
+                    ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
+                    ax.set_ylabel(pupil_dv)
+                    ax.set_xlabel('pupil_baseline_feed_locked')
+                    # ax.legend()
+                    plt.tight_layout()
+                    fig.savefig(os.path.join(self.figure_folder,'{}_confound_baseline_phasic_{}.pdf'.format(self.exp, pupil_dv)))
+            DFOUT[pupil_dv] = np.array(save_coeff)
+        DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_baseline_phasic.csv'.format(self.exp)))
+        print('success: confound_baseline_phasic')
         
+    
+    def dataframe_evoked_pupil_higher(self):
+        """Compute evoked pupil responses.
+        
+        Notes
+        -----
+        Split by conditions of interest. Save as higher level dataframe per condition of interest. 
+        Evoked dataframes need to be combined with behavioral data frame, looping through subjects. 
+        DROP PHASE 2 trials.
+        Drop omission trials (in subject loop).
+        Output in dataframe folder.
+        """
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
         csv_names = deepcopy(['subject','correct','mapping1','correct-mapping1'])
@@ -593,10 +868,13 @@ class higherLevel(object):
     
     
     def plot_evoked_pupil(self):
-        # plots evoked pupil, each condition own figure
-        # plots the group level mean for target_locked
-        # plots the group level accuracy x mapping interaction for target_locked
-
+        """Plot evoked pupil time courses.
+        
+        Notes
+        -----
+        4 figures: mean response, accuracy, frequency, accuracy*frequency.
+        Always target_locked pupil response.
+        """
         ylim_feed = [-2.5,2.5]
         tick_spacer = 2.5
         
@@ -870,124 +1148,3 @@ class higherLevel(object):
         fig.savefig(os.path.join(self.figure_folder,'{}_evoked_{}.pdf'.format(self.exp, csv_name)))
         print('success: plot_evoked_pupil')
     
-    
-    def individual_differences(self,):
-       # correlate interaction term in pupil with frequency effect in accuracy
-       
-       dvs = ['pupil_target_locked_t1','pupil_target_locked_t2', 'pupil_baseline_target_locked']
-              
-       for sp,pupil_dv in enumerate(dvs):
-           fig = plt.figure(figsize=(2,2))
-           ax = fig.add_subplot(111) # 1 subplot per bin window
-           
-           B = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_correct_rmanova.csv'.format(self.exp)))
-           P = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_{}_rmanova.csv'.format(self.exp, pupil_dv)))
-
-           # frequency effect
-           P['main_effect_freq'] = (P['1']-P['0']) # mapping1=1 is 80% condition
-           B['main_effect_freq'] = (B['1']-B['0']) # fraction correct
-           
-           x = np.array(B['main_effect_freq'])
-           y = np.array(P['main_effect_freq'])           
-           # all subjects
-           r,pval = stats.spearmanr(x,y)
-           print('all subjects')
-           print(pupil_dv)
-           print('r={}, p-val={}'.format(r,pval))
-
-           # all subjects
-           ax.plot(x, y, 'o', markersize=3, color='green') # marker, line, black
-           m, b = np.polyfit(x, y, 1)
-           ax.plot(x, m*x+b, color='green',alpha=.5, label='all participants')
-           
-           # set figure parameters
-           ax.set_title('r={}, p-val={}'.format(np.round(r,2),np.round(pval,3)))
-           ax.set_ylabel('{} (80%-20%)'.format(pupil_dv))
-           ax.set_xlabel('accuracy (80%-20%)')
-           # ax.legend()
-           
-           plt.tight_layout()
-           fig.savefig(os.path.join(self.figure_folder,'{}_frequency_individual_differences_{}.pdf'.format(self.exp, pupil_dv)))
-       print('success: individual_differences')
-
-
-    def confound_rt_pupil(self,):
-        # single-trial correlation between RT and pupil_dvs, subject and group level
-        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']
-        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
-        for sp, pupil_dv in enumerate(dvs):
-
-            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-            
-            ############################
-            # drop outliers
-            DF = DF[DF['outlier_rt']==0]
-            ############################
-
-            plot_subject = np.random.randint(0, len(self.subjects)) # plot random subject
-            save_coeff = []
-            for s, subj in enumerate(np.unique(DF['subject'])):
-                this_df = DF[DF['subject']==subj].copy()
-
-                x = np.array(this_df['reaction_time'])
-                y = np.array(this_df[pupil_dv])  
-                r,pval = stats.pearsonr(x,y)
-                save_coeff.append(self.fisher_transform(r))
-                
-                if s==plot_subject:  # plot one random subject
-                    fig = plt.figure(figsize=(2,2))
-                    ax = fig.add_subplot(111)
-                    ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
-                    m, b = np.polyfit(x, y, 1)
-                    ax.plot(x, m*x+b, color='grey',alpha=1)
-                    # set figure parameters
-                    ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
-                    ax.set_ylabel(pupil_dv)
-                    ax.set_xlabel('RT (s)')
-                    # ax.legend()
-                    plt.tight_layout()
-                    fig.savefig(os.path.join(self.figure_folder,'{}_confound_RT_{}.pdf'.format(self.exp, pupil_dv)))
-            DFOUT[pupil_dv] = np.array(save_coeff)
-        DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_RT.csv'.format(self.exp)))
-        print('success: confound_rt_pupil')
-
-
-    def confound_baseline_phasic(self,):
-        # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
-        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2']
-        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
-        for sp, pupil_dv in enumerate(dvs):
-
-            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-            
-            ############################
-            # drop outliers
-            DF = DF[DF['outlier_rt']==0]
-            ############################
-
-            plot_subject = np.random.randint(0,len(self.subjects)) # plot random subject
-            save_coeff = []
-            for s, subj in enumerate(np.unique(DF['subject'])):
-                this_df = DF[DF['subject']==subj].copy()
-
-                x = np.array(this_df['pupil_baseline_target_locked'])
-                y = np.array(this_df[pupil_dv])  
-                r,pval = stats.pearsonr(x,y)
-                save_coeff.append(self.fisher_transform(r))
-                
-                if s==plot_subject:  # plot one random subject
-                    fig = plt.figure(figsize=(2,2))
-                    ax = fig.add_subplot(111)
-                    ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
-                    m, b = np.polyfit(x, y, 1)
-                    ax.plot(x, m*x+b, color='grey',alpha=1)
-                    # set figure parameters
-                    ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
-                    ax.set_ylabel(pupil_dv)
-                    ax.set_xlabel('pupil_baseline_feed_locked')
-                    # ax.legend()
-                    plt.tight_layout()
-                    fig.savefig(os.path.join(self.figure_folder,'{}_confound_baseline_phasic_{}.pdf'.format(self.exp, pupil_dv)))
-            DFOUT[pupil_dv] = np.array(save_coeff)
-        DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_baseline_phasic.csv'.format(self.exp)))
-        print('success: confound_baseline_phasic')

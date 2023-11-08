@@ -1,34 +1,32 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# encoding: utf-8
 """
-Cues probabilistically indicate the orientation direction of the target stimulus
-"Cue-target orientation 2AFC task" for short
-Python code by O.Colizoli 2022
+================================================
+Pupil dilation offers a time-window in prediction error
+
+Data set #1 Cue-target orientation 2AFC task - RUN ANALYSIS HERE
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
 Python 3.6
-"""
-"""
-Notes: 
-sub-10 flipped response mappings in raw behavioral log file
+
+Notes
+-----
+>> conda install matplotlib # fixed the matplotlib crashing error in 3.6
+================================================
 """
 
-############################################################################
-# PUPIL ANALYSES
-############################################################################
-# importing python packages
 import os, sys, datetime, time
 import numpy as np
 import pandas as pd
 from IPython import embed as shell # for debugging
 import preprocessing_functions_orientation as pupil_preprocessing
 import higher_level_functions_orientation as higher
-# conda install matplotlib # fixed the matplotlib crashing error in 3.6
 
 # -----------------------
-# Levels
+# Levels (toggle True/False)
 # ----------------------- 
 pre_process     = False # pupil preprocessing is done on entire time series
 trial_process   = False # cut out events for each trial and calculate trial-wise baselines, baseline correct evoked responses
-higher_level    = True  # all subjects' dataframe, pupil and behavior higher level analyses & figures
+higher_level    = False  # all subjects' dataframe, pupil and behavior higher level analyses & figures
 
 # -----------------------
 # Paths
@@ -39,10 +37,16 @@ source_dir      = os.path.join(home_dir, 'raw')
 data_dir        = os.path.join(home_dir, 'derivatives')
 experiment_name = 'task-cue_target_orientation'
 
+# copy 'raw' to derivatives if it doesn't exist:
+if not os.path.isdir(data_dir):
+    shutil.copytree(source_dir, data_dir) 
+else:
+    print('Derivatives directory exists. Continuing...')
+    
 # -----------------------
 # Participants
 # -----------------------
-ppns     = pd.read_csv(os.path.join(home_dir,'derivatives','participants.csv'))
+ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants.csv'))
 subjects = ['sub-{}'.format(s) for s in ppns['subject']]
 group    = ppns['normal_order']
 
@@ -66,12 +70,11 @@ if pre_process:
     threshold = 0       # detect peaks (valleys) that are greater (smaller) than `threshold` in relation to their immediate neighbors
     # process 1 subject at a time
     for s,subj in enumerate(subjects):
-        edf = '{}_{}_recording-eyetracking_physio'.format(subj,experiment_name)
+        edf = '{}_{}_recording-eyetracking_physio'.format(subj, experiment_name)
         # initialize class
         pupilPreprocess = pupil_preprocessing.pupilPreprocess(
             subject             = subj,
             edf                 = edf,
-            source_directory    = source_dir,
             project_directory   = data_dir,
             sample_rate         = sample_rate,
             tw_blinks           = tw_blinks,
@@ -79,7 +82,7 @@ if pre_process:
             mpd                 = mpd,
             threshold           = threshold
             )
-        pupilPreprocess.housekeeping(experiment_name)   # rename and copy files 
+        pupilPreprocess.housekeeping(experiment_name)   # rename files 
         pupilPreprocess.read_trials()                   # change read_trials for different message strings
         pupilPreprocess.preprocess_pupil()              # blink interpolation, filtering, remove blinks/saccades, percent signal change, plots output
 
@@ -89,7 +92,7 @@ if pre_process:
 if trial_process:  
     # process 1 subject at a time
     for s,subj in enumerate(subjects):
-        edf = '{}_{}_recording-eyetracking_physio'.format(subj,experiment_name)
+        edf = '{}_{}_recording-eyetracking_physio'.format(subj, experiment_name)
         # initialize class
         trialLevel = pupil_preprocessing.trials(
             subject             = subj,
@@ -117,25 +120,25 @@ if higher_level:
         time_locked             = time_locked,
         pupil_step_lim          = pupil_step_lim,                
         baseline_window         = baseline_window,              
-        pupil_time_of_interest  = [[[0.75,1.25],[2.5,3.0]]] # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil     
+        pupil_time_of_interest  = [[[0.75, 1.25], [2.5, 3.0]]] # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil     
         )
 
     higherLevel.higherlevel_log_conditions()     # computes mappings, accuracy, and missing trials
-    # higherLevel.higherlevel_get_phasics()        # computes phasic pupil for each subject (adds to log files)
-    # higherLevel.create_subjects_dataframe()      # adds baseline pupil, combines all subjects' behavioral files: task-predictions_subjects.csv, flags outliers, drops phase 2 trials
+    higherLevel.higherlevel_get_phasics()        # computes phasic pupil for each subject (adds to log files)
+    higherLevel.create_subjects_dataframe()      # adds baseline pupil, combines all subjects' behavioral files: task-predictions_subjects.csv, flags outliers, drops phase 2 trials
     ''' Note: the functions after this are using: task-cue_target_orientation_subjects.csv
     '''
     ''' DV averages within bin windows
     '''
-    # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
-    # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
-    # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
-    # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
-    # higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
-    # higherLevel.confound_baseline_phasic()     # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
+    higherLevel.average_conditions()           # group level data frames for all main effects + interaction
+    higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
+    higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
+    higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
+    higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
+    higherLevel.confound_baseline_phasic()     # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
     
     ''' Evoked pupil response
     '''
-    # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
      

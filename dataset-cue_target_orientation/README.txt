@@ -7,6 +7,6 @@ Rutar, D., Colizoli, O., Selen, L., Spieß, L., Kwisthout, J., & Hunnius, S. (20
 
 The public data can be downloaded here: https://doi.org/10.34973/t41p-hx94
 
-The participants file used in the current article can be found in dataset-cue_target_orientation > derivatives > participants.csv
-A copy of the processed data file for the current article can be found in dataset-cue_target_orientation > derivatives > save_processed_data > task-cue_target_orientation_subjects.csv
+The participants file used in the current article can be found in dataset-cue_target_orientation > analysis > participants.csv
+A copy of the processed data file for the current article can be found in dataset-cue_target_orientation > save_processed_data > task-cue_target_orientation_subjects.csv
 

@@ -13,7 +13,6 @@ import numpy as np
 import scipy as sp
 import seaborn as sns
 import shutil
-from shutil import copyfile
 import re # regular expression
 from copy import deepcopy
 import matplotlib
@@ -67,7 +66,32 @@ class pupilPreprocess(object):
             
         if not os.path.exists(self.figure_folder):
             os.makedirs(self.figure_folder)
-       
+    
+    def housekeeping(self, experiment_name):
+        # Rename files from original download 'prediction' and replace with experiment_name.
+        # Then copy to derivatives folder
+        
+        # RENAME
+        files = os.listdir(self.source_directory)
+        for f in files:
+            src = os.path.join(self.source_directory, f)
+            dst = src.replace("task-prediction", experiment_name)
+            try:
+                os.rename(src, dst)
+            except:
+                print('did not rename src: {}'.format(src))
+        
+        # COPY FROM RAW TO DERIVATIVES
+        files = os.listdir(self.source_directory)
+        for f in files:
+            src = os.path.join(self.source_directory, f)
+            dst = os.path.join(self.project_directory, f)
+            try:
+                shutil.copyfile(src, dst)
+            except:
+                print('could not copy src: {}'.format(src))
+            
+         
     def read_trials(self,):
         # Extracts messages and pupil from raw text files
         # messages are in the 'L Raw X [px]' column
@@ -87,7 +111,7 @@ class pupilPreprocess(object):
         self.TS = pd.DataFrame(EDF[EDF['Type'] == 'SMP']['R Dia X [px]']).reset_index() # index here referes to original rows, very important to keep it together with the pupil data
         self.TS.columns=['index','pupil']   # rename columns        
         # columns =['index', 'pupil']
-        np.save(os.path.join(self.project_directory,'{}_pupil.npy'.format(self.alias)), np.array(self.TS))
+        np.save(os.path.join(self.project_directory,'{}.npy'.format(self.alias)), np.array(self.TS))
         print('{} messages processed'.format(self.subject))
 
     
@@ -96,12 +120,12 @@ class pupilPreprocess(object):
         # Current pupil time course is always 'self.pupil'
         # Saves time series at each stage with labels, global variables  (e.g. self.pupil_interp)
         cols1=['index', 'pupil'] # before preprocessing
-        cols2=['index', 'pupil', 'pupil_interp','pupil_bp','pupil_clean','pupil_psc', 'pupil_zscore']        
+        cols2=['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_zscore']        
                 
         try:
-            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory,'{}_pupil.npy'.format(self.alias))),columns=cols1)
+            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory,'{}.npy'.format(self.alias))),columns=cols1)
         except:
-            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory,'{}_pupil.npy'.format(self.alias))),columns=cols2)
+            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory,'{}.npy'.format(self.alias))),columns=cols2)
                 
         self.pupil_raw = np.array(self.TS['pupil'])
         
@@ -120,7 +144,7 @@ class pupilPreprocess(object):
         self.TS['pupil_clean']   = self.pupil_clean
         self.TS['pupil_psc']     = self.pupil_psc
         self.TS['pupil_zscore']  = self.pupil_zscore
-        np.save(os.path.join(self.project_directory,'{}_pupil_preprocessed.npy'.format(self.alias)), np.array(self.TS))
+        np.save(os.path.join(self.project_directory,'{}_preprocessed.npy'.format(self.alias)), np.array(self.TS))
         
         self.plot_pupil()                   # plots the pupil in all stages
         
@@ -718,13 +742,13 @@ class trials(object):
         # Saves events as numpy arrays per subject in dataframe folder/subjects per event of interest
         # Rows = trials x kernel length
         
-        cols=['index', 'pupil', 'pupil_interp','pupil_bp','pupil_clean','pupil_psc']
+        cols=['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_zscore']
         
         # loop through each type of event to lock events to...
         for t,time_locked in enumerate(self.time_locked):
             pupil_step_lim = self.pupil_step_lim[t]
 
-            TS = pd.DataFrame(np.load(os.path.join(self.project_directory,'{}.npy'.format(self.alias))),columns=cols)   
+            TS = pd.DataFrame(np.load(os.path.join(self.project_directory,'{}_preprocessed.npy'.format(self.alias))),columns=cols)   
             TS = TS.loc[:,['index',pupil_dv]] # don't need all columns            
             # get indices of phases with respect to full time series (add 1 because always one cell before event)
             phases = pd.read_csv(os.path.join(self.project_directory,'{}_phases.csv'.format(self.alias)))

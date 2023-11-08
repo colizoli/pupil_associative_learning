@@ -565,7 +565,7 @@ class higherLevel(object):
                     fig.savefig(os.path.join(self.figure_folder,'{}_confound_RT_{}.pdf'.format(self.exp, pupil_dv)))
             DFOUT[pupil_dv] = np.array(save_coeff)
         DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_RT.csv'.format(self.exp)))
-    print('success: confound_rt_pupil')
+        print('success: confound_rt_pupil')
 
 
     def confound_baseline_phasic(self,):
@@ -606,7 +606,7 @@ class higherLevel(object):
                     fig.savefig(os.path.join(self.figure_folder,'{}_confound_baseline_phasic_{}.pdf'.format(self.exp, pupil_dv)))
             DFOUT[pupil_dv] = np.array(save_coeff)
         DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_baseline_phasic.csv'.format(self.exp)))
-    print('success: confound_baseline_phasic')
+        print('success: confound_baseline_phasic')
     
     
     def dataframe_evoked_pupil_higher(self):

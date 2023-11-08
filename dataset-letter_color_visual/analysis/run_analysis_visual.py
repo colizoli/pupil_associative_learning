@@ -12,7 +12,7 @@ Python 3.6
 # PUPIL ANALYSES
 ############################################################################
 # importing python packages
-import os, sys, datetime, time
+import os, sys, datetime, time, shutil
 import numpy as np
 import pandas as pd
 import oddball_training_visual as training_higher
@@ -39,6 +39,12 @@ source_dir      = os.path.join(home_dir, 'raw')
 data_dir        = os.path.join(home_dir, 'derivatives')
 experiment_name = 'task-letter_color_visual_decision' # 2AFC Decision Task
 
+# copy 'raw' to derivatives if it doesn't exist:
+if not os.path.isdir(data_dir):
+    shutil.copytree(source_dir, data_dir) 
+else:
+    print('Derivatives directory exists. Continuing...')
+
 # -----------------------
 # Participants
 # -----------------------
@@ -54,10 +60,10 @@ if training:
         experiment_name   = 'task-letter_color_visual_training',
         project_directory = data_dir
         )
-    # oddballTraining.create_subjects_dataframe()       # drops missed trials, saves higher level data frame
-    # oddballTraining.average_conditions()              # group level data frames for all main effects + interaction
+    oddballTraining.create_subjects_dataframe()       # drops missed trials, saves higher level data frame
+    oddballTraining.average_conditions()              # group level data frames for all main effects + interaction
     oddballTraining.plot_behav()                      # plots behavior, group level, main effects + interaction
-    # oddballTraining.calculate_actual_frequencies()    # calculates the actual frequencies of pairs
+    oddballTraining.calculate_actual_frequencies()    # calculates the actual frequencies of pairs
 
 # -----------------------
 # Event-locked pupil parameters (shared)
@@ -98,7 +104,7 @@ if pre_process:
             mpd                 = mpd,
             threshold           = threshold,
             )
-        # pupilPreprocess.convert_edfs()              # converts EDF to asc, msg and gaze files (run locally)
+        pupilPreprocess.convert_edfs()              # converts EDF to asc, msg and gaze files (run locally)
         pupilPreprocess.extract_pupil()             # read trials, and saves time locked pupil series as NPY array in processed folder
         pupilPreprocess.preprocess_pupil()          # blink interpolation, filtering, remove blinks/saccades, split blocks, percent signal change, plots output
 
@@ -137,18 +143,18 @@ if higher_level:
         pupil_time_of_interest  = [[[0.75,1.25],[2.5,3.0]]], # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
         freq_cond               = 'frequency'   # determines how to group the conditions based on actual frequencies
         )
-    # higherLevel.higherlevel_get_phasics()       # computes phasic pupil for each subject (adds to log files)
-    # higherLevel.create_subjects_dataframe(blocks=break_trials+[240])  # add baselines, concantenates all subjects, flags missed trials, saves higher level data frame
+    higherLevel.higherlevel_get_phasics()       # computes phasic pupil for each subject (adds to log files)
+    higherLevel.create_subjects_dataframe(blocks=break_trials+[240])  # add baselines, concantenates all subjects, flags missed trials, saves higher level data frame
     ''' Note: the functions after this are using: task-letter_color_visual_decision_subjects.csv
     '''
-    # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
-    # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
-    # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
-    # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
-    # higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
-    # higherLevel.confound_baseline_phasic()       # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
+    higherLevel.average_conditions()           # group level data frames for all main effects + interaction
+    higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
+    higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
+    higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
+    higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
+    higherLevel.confound_baseline_phasic()       # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
     
     ''' Evoked pupil response
     '''
-    # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
     higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction

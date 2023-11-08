@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-Letter-color associations formed through statistical learning in the visual modality
-"Letter-color visual 2AFC task" for short
-Python code by O.Colizoli 2022
+================================================
+Pupil dilation offers a time-window in prediction error
+
+Data set #2 Letter-color 2AFC task - Preprocessing pupil dilation
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
 Python 3.6
+
+================================================
 """
 
 import os, sys, subprocess
@@ -19,22 +23,21 @@ import matplotlib
 import matplotlib.pyplot as plt
 from lmfit import minimize, Parameters, Parameter, report_fit
 from fir import FIRDeconvolution
-
 import glm_functions # for nuisance regression
 from IPython import embed as shell # for debugging
-## SEE JW's eye signal operator script for original preprocessing functions
 
-# plot settings
+
+""" Plotting Format"""
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 sns.set(style='ticks', font='Arial', font_scale=1, rc={
-    'axes.linewidth': 1,
-    'axes.labelsize': 7,
-    'axes.titlesize': 7,
-    'xtick.labelsize': 6,
-    'ytick.labelsize': 6,
-    'legend.fontsize': 6,
-    'xtick.major.width': 1,
+    'axes.linewidth': 1, 
+    'axes.labelsize': 7, 
+    'axes.titlesize': 7, 
+    'xtick.labelsize': 7, 
+    'ytick.labelsize': 7, 
+    'legend.fontsize': 7, 
+    'xtick.major.width': 1, 
     'ytick.major.width': 1,
     'text.color': 'Black',
     'axes.labelcolor':'Black',
@@ -42,8 +45,77 @@ sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'ytick.color':'Black',} )
 sns.plotting_context()
 
+
 class pupilPreprocess(object):
-    """pupilPreprocessing"""
+    """Define a class for the preprocessing of the pupil data.
+
+    Parameters
+    ----------
+    subject : string
+        Subject number.
+    edf : string
+        The name of the current subject's EDF file containing pupil data.
+    project_directory : str
+        Path to the derivatives data directory.
+    eye : string
+        The eye that was tracked.
+    break_trials : list
+        Which trial comes after each break.
+    msgs : list of strings
+        Which messages to flag in preprocessing.
+    tolkens : list of strings
+        The eye events to flag (e.g., saccades and blinks)
+    sample_rate : int
+        Sampling rate of pupil data in Hertz.
+    tw_blinks : int or float
+        How many seconds to interpolate before and after blinks.
+    mph : int or float 
+        Detect peaks that are greater than minimum peak height.
+    mpd : int or float 
+        Blinks separated by minimum number of samples.
+    threshold : int or float 
+        Detect peaks (valleys) that are greater (smaller) than `threshold` in relation to their immediate neighbors.
+
+    Attributes
+    ----------
+    subject : string
+        Subject number.
+    alias : string
+        The name of the current subject's EDF file containing pupil data.
+    project_directory : str
+        Path to the derivatives data directory.
+    base_directory : str
+        Path to the current subject's derivatives directory.
+    gazeOutputFileName : str
+        Path to the .gaz file
+    messageOutputFileName : str
+        Path to the .msg file
+    standardOutputFileName : str
+        Path to the .asc file
+    eye : string
+        The eye that was tracked.
+    break_trials : list
+        Which trial comes after each break.
+    msgs : list of strings
+        Which messages to flag in preprocessing.
+    tolkens : list of strings
+        The eye events to flag (e.g., saccades and blinks)
+    sample_rate : int
+        Sampling rate of pupil data in Hertz.
+    time_window_blinks : int or float
+        How many seconds to interpolate before and after blinks.
+    mph : int or float 
+        Detect peaks that are greater than minimum peak height.
+    mpd : int or float 
+        Blinks separated by minimum number of samples.
+    threshold : int or float 
+        Detect peaks (valleys) that are greater (smaller) than `threshold` in relation to their immediate neighbors.
+    add_base : boolean
+        Refers to add baseline pupil back into time series. Needs to be initialized as True, regress_blinks_saccades() will make False if called.
+    figure_folder : str
+        Path to the figure directory.
+    """
+    
     def __init__(self, subject, edf, project_directory, eye, break_trials, msgs, tolkens, sample_rate, tw_blinks, mph, mpd, threshold):
         self.subject = str(subject)
         self.alias = edf
@@ -62,19 +134,23 @@ class pupilPreprocess(object):
         self.mpd = mpd
         self.threshold = threshold
         self.add_base = True # make false if regressing out blinks, saccades
-        
         self.figure_folder = os.path.join(project_directory, 'figures','preprocessing')
+        
         if not os.path.isdir(self.figure_folder):
             os.mkdir(self.figure_folder)
         
+        
     def convert_edfs(self,):
-        # converts the EDF file to ASC using the edf2asc executable (as part of the EyeLink desktop application)
-        # splits the ASC file into messages and gaze data (samples only)
-              
-        # terminal commands
-        # ./edf2asc Feedback_S2_gpe.edf 
-        # ./edf2asc -e Feedback_S2_gpe.edf # gets messages only
-        # ./edf2asc -s Feedback_S2_gpe.edf # gets samples only
+        """Convert the EDF file to ASC using the edf2asc executable (as part of the EyeLink desktop application).
+        
+        Notes
+        -----
+        Splits the ASC file into messages and gaze data (samples only).
+        terminal commands
+        >> ./edf2asc Feedback_S2_gpe.edf 
+        >> ./edf2asc -e Feedback_S2_gpe.edf # gets messages only
+        >> ./edf2asc -s Feedback_S2_gpe.edf # gets samples only
+        """
         # Events/messages 
         input_edf = os.path.join(self.base_directory, self.alias+'.edf')
         cmd = './edf2asc -e -y {}'.format(input_edf)
@@ -90,9 +166,14 @@ class pupilPreprocess(object):
         cmd = './edf2asc {}'.format(input_edf)
         subprocess.call( cmd, shell=True, bufsize=0,)
     
+    
     def read_trials(self,):
-        # For each message in msgs, get timestamp from .msg file
-
+        """Read in the message, markers, and data from the EDF pupil data file.
+        
+        Notes
+        -----
+        For each message in msgs, get timestamp from .msg file.
+        """
         # TASK MARKERS
         self.msgs_markers = [] # make global variable
         # loop through msgs, then loops through file lines
@@ -154,11 +235,15 @@ class pupilPreprocess(object):
             self.msgs_tolkens_timestamps_begin.append(this_marker_begin)
             self.msgs_tolkens_timestamps_end.append(this_marker_end) # number of samples
         
-    def extract_pupil(self,):
-        ### EXTRACT PUPIL DATA by timestamps
-        # first column time stamp, 4th column is pupil data
-        # saves pupil time series and eye events in one numpy array, phases in another
         
+    def extract_pupil(self,):
+        """Extract pupil data by timestamps.
+        
+        Notes
+        -----
+        First column time stamp, 4th column is pupil data.
+        Saves pupil time series and eye events in one numpy array, phases in another.
+        """
         self.read_trials() # RUN FIRST
         pupil_data = pd.read_csv(self.gazeOutputFileName, header=None, sep='\t',usecols=[0,3], names=['timestamp','pupil'])
         
@@ -223,11 +308,18 @@ class pupilPreprocess(object):
         np.save(os.path.join(self.base_directory,self.alias+'_phases.npy'), np.array(PHASES))
         print('Pupil data saved: {}'.format(os.path.join(self.base_directory,self.alias+'.npy')))
     
+    
     def preprocess_pupil(self,):
-        # Carries out pupil preprocessing steps
-        # Current pupil time course is always 'self.pupil'
-        # Saves time series at each stage with labels, global variables  (e.g. self.pupil_interp)
-        
+        """Carries out pupil preprocessing routine.
+
+        Notes
+        -------
+        Current pupil time course is always 'self.pupil'.
+        Steps include: interpolation around blinks based on markers, then based on peaks, bandpass filtering, nuisance regression on blinks and saccades,
+        Convert to percent signal change.
+        Saves time series at each stage with labels, global variables  (e.g., self.pupil_interp)
+        Calls the preprocessing plot for each subject.
+        """
         cols1=['timestamp','pupil','ts_adjusted','ESACC','ESACC_END','EBLINK','EBLINK_END'] # before preprocessing
         cols2=['timestamp','pupil','ts_adjusted','ESACC','ESACC_END','EBLINK','EBLINK_END','pupil_interp','pupil_bp','pupil_clean','pupil_psc']
         
@@ -256,12 +348,16 @@ class pupilPreprocess(object):
         np.save(os.path.join(self.base_directory,self.alias+'.npy'), np.array(self.TS))
         print('Pupil data preprocessed')
         
+        
     def interpolate_blinks(self,):
-        """
-        Modified from JW's function
-        interpolate_blinks interpolates blink periods with method, which can be spline or linear.
-        The results are stored in self.pupil_interp, without affecting the self.pupil_raw_... variables
-        After calling this method, additional interpolation may be performed by calling self.interpolate_blinks2()
+        """Perform linear interpolation around blinks based on blink markers.
+        
+        Notes
+        -----
+        lin_interpolation_points is a 2 by X list detailing the data points around the blinks
+        (in s offset from blink start and end) that should be used for fitting the interpolation spline.
+        The results are stored in self.pupil_interp, self.pupil is also updated.
+        After calling this method, additional interpolation may be performed by calling self.interpolate_peaks()
         """
         time_window = self.time_window_blinks # in seconds
         method = 'linear'
@@ -331,10 +427,11 @@ class pupilPreprocess(object):
         self.pupil = self.pupil_interp
         print('pupil blinks interpolated from EyeLink events')
     
+    
     def detect_peaks(self, x, mph=None, mpd=1, threshold=0, edge='rising', kpsh=False, valley=False, show=False, ax=None):
-
     	"""Detect peaks in data based on their amplitude and other features.
-    	Parameters
+    	
+        Parameters
     	----------
     	x : 1D array_like
     		data.
@@ -395,7 +492,6 @@ class pupilPreprocess(object):
     	>>> # set threshold = 2
     	>>> detect_peaks(x, threshold = 2, show=True)
     	"""
-
     	x = np.atleast_1d(x).astype('float64')
     	if x.size < 3:
     		return np.array([], dtype=int)
@@ -455,12 +551,12 @@ class pupilPreprocess(object):
 
     	return ind
         
+        
     def interpolate_blinks_peaks(self,):
+        """Perform linear interpolation around peaks in the rate of change of the pupil size.
         
-        """
-        interpolate_blinks_peaks performs linear interpolation around peaks in the rate of change of
-        the pupil size.
-        
+        Notes
+        -----
         The results are stored in self.interpolated_pupil, without affecting the self.raw_... variables.
         
         This method is typically called after an initial interpolation using self.interpolateblinks(),
@@ -510,9 +606,16 @@ class pupilPreprocess(object):
         self.pupil = self.pupil_interp
         print('pupil blinks interpolated from derivative')
        
+       
     def bandpass_filter(self,):
-        # Bandpass filtering
-        # 3rd order butterworth 0.01 to 6 Hz
+        """Perform bandpass filtering on pupil time series (3rd order butterworth 0.01 to 6 Hz).
+        
+        Notes
+        -----
+        This way adds curved artifact to timeseries
+        b,a = butter(N, Wn, btype='bandpass')   # define filter
+        y = filtfilt(b, a, self.pupil)          # apply filter
+        """
         from scipy.signal import butter, filtfilt
         N = 3 # order
         Nyquist = 0.5*self.sample_rate
@@ -540,10 +643,18 @@ class pupilPreprocess(object):
         self.pupil = self.pupil_bp
         print('pupil bandpass filtered butterworth')
     
+    
     def regress_blinks_saccades(self,):
-        # Blinks and saccades estimated with deconvolution
-        # Then removed via linear regression
+        """Perform linear regression on pupil time series to remove blink and saccade events.
         
+        Notes
+        -----
+        Blinks and saccades estimated with deconvolution.
+        The nuisance event is estimated based on deconvolution (see output in figure folder), 
+        then this response is removed from the time series with linear regression.
+        The residuals of this regression are of interest for the pupil analyses as self.pupil_clean. 
+        Also, self.pupil is updated.
+        """
         plot_IRFs = True # plot for each subject the deconvolved responses in fig folder
         self.add_base = False
         # params:
@@ -716,13 +827,16 @@ class pupilPreprocess(object):
         self.pupil = self.pupil_clean 
         print('pupil blinks and saccades removed with linear regression')
     
+    
     def extract_blocks(self,):
-        # cuts out the blocks before normalization (after drift correction)
-        # breaks by trial number (easiest)
-        # self.pupil_blocks is a list with each block as element
-        # afterwards, pass to # signal change the concatenate
+        """Cut out the blocks between breaks before normalization (after drift correction).
         
-        # phases
+        Notes
+        -----
+        Breaks by trial number (easiest)
+        self.pupil_blocks is a list with each block as element.
+        Afterwards, pass to percent signal change then concatenate
+        """
         phases = pd.DataFrame(np.load(os.path.join(self.base_directory,self.alias+'_phases.npy')),columns=self.msgs[2:])
         phase_idx = phases[phases['phase 1'] == 1.0].index.tolist() # locked to break
         # loop through trials, cut out blocks (all different sizes, save as separate arrays)
@@ -748,11 +862,15 @@ class pupilPreprocess(object):
         
         print('pupil blocks extracted for normalization: No. blocks = {}'.format(len(self.pupil_blocks)))       
     
+    
     def percent_signal_change(self,):
-        # Converts processed pupil to percent signal change with respect to mean of current run
-        # (timeseries/median*100)-100 # alternative to mean
-        # normalize each block separately because subjects moved their heads, then concatenate again
+        """Convert processed pupil to percent signal change with respect to the temporal mean.
         
+        Notes
+        -----
+        For median use: (timeseries/median*100)-100
+        self.pupil is not updated.
+        """
         pupil_psc = [] # to be concatenated
         for BLOCK,this_pupil in enumerate(self.pupil_blocks):
             this_pupil = np.array(this_pupil)
@@ -767,11 +885,16 @@ class pupilPreprocess(object):
         self.pupil = self.pupil_psc
         print('pupil converted percent signal change')
         
+        
     def plot_pupil(self,):               
-        # plots the pupil in all stages
-        # 1: raw, 2: blink interpolated, 3: temporal filtering, 4: blinks/saccades removed, 5: percent signal change
-        # pupil is downsampled for plotting
-        # saved in 'figs' folder
+        """Plot the pupil in all preprocessing stages (1 figure per subject).
+        
+        Notes
+        -----
+        subplots are... 1: raw, 2: blink interpolated, 3: temporal filtering, 4: blinks/saccades removed, 5: percent signal change
+        The pupil is downsampled for plotting.
+        The figure is saved as PDF in the figure folder.
+        """
         from scipy.signal import decimate
         downsample_rate = 20 # 20 Hz
         downsample_factor = self.sample_rate / downsample_rate # 50
@@ -857,14 +980,61 @@ class pupilPreprocess(object):
         
     
 class trials(object):
+    """Define a class for the single trial level pupil data.
+
+    Parameters
+    ----------
+    subject : string
+        Subject number.
+    edf : string
+        The name of the current subject's EDF file containing pupil data.
+    project_directory : str
+        Path to the derivatives data directory.
+    sample_rate : int
+        Sampling rate of pupil data in Hertz.
+    phases : list
+        Message markers for each event of interest in EDF file as a list of strings (e.g., ['cue','target']).
+    time_locked : list
+        List of strings indiciting the events for time locking that should be analyzed (e.g., ['cue_locked','target_locked']).
+    pupil_step_lim : list 
+        List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] ).
+    baseline_window : float
+        Number of seconds before each event in self.time_locked that are averaged for baseline correction.
+
+    Attributes
+    ----------
+    subject : string
+        Subject number.
+    alias : string
+        The name of the current subject's EDF file containing pupil data.
+    project_directory : str
+        Path to the derivatives data directory.
+    figure_folder : str
+        Path to the figure directory.
+    sample_rate : int
+        Sampling rate of pupil data in Hertz.
+    phases : list
+        Message markers for each event of interest in EDF file as a list of strings (e.g., ['cue','target']).
+    time_locked : list
+        List of strings indiciting the events for time locking that should be analyzed (e.g., ['cue_locked','target_locked']).
+    pupil_step_lim : list 
+        List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] ).
+    baseline_window : float
+        Number of seconds before each event in self.time_locked that are averaged for baseline correction.
+    downsample_rate : int or float
+        Rate for pupil downsampling (helps with plotting)
+    downsample_factor : int or float
+        The downsample factor is the sample rate divided by the downsample rate (helps with plotting)
+    """
+    
     def __init__(self,subject, edf, project_directory,sample_rate,phases,time_locked,pupil_step_lim,baseline_window):
+        """Constructor method"""
         self.subject = subject
         self.alias = edf
         self.project_directory = os.path.join(project_directory,self.subject,'beh') # single-subject directory
         self.figure_folder = os.path.join(project_directory,'figures','preprocessing') # group-level directory for easy inspection
         self.sample_rate = sample_rate
         self.phases = phases
-                
         ##############################    
         # Pupil time series information:
         ##############################
@@ -878,11 +1048,20 @@ class trials(object):
         if not os.path.isdir(self.figure_folder):
             os.mkdir(self.figure_folder)
     
+    
     def event_related_subjects(self,pupil_dv):
-        # Cuts out time series of pupil data locked to time points of interest
-        # Saves events as numpy arrays per subject in dataframe folder/subjects per event of interest
-        # Rows = trials x kernel length
-        
+        """Cut out time series of pupil data locked to time points of interest within the given kernel.
+            
+        Parameters
+            ----------
+        pupil_dv : string
+            The pupil time series to be processed (e.g., 'pupil_psc' or 'pupil_zscore')
+    
+        Notes
+        -----
+        Saves events as numpy arrays per subject in dataframe folder/subjects per event of interest.
+        Rows = trials x kernel length
+        """
         cols=['timestamp','pupil','ts_adjusted','ESACC','ESACC_END','EBLINK','EBLINK_END','pupil_interp','pupil_bp','pupil_clean','pupil_psc']
         
         TS = pd.DataFrame(np.load(os.path.join(self.project_directory,'{}.npy'.format(self.alias))),columns=cols)   
@@ -915,10 +1094,14 @@ class trials(object):
             print('subject {}, {} events extracted'.format(self.subject,time_locked))
         print('sucess: event_related_subjects')
     
+    
     def event_related_baseline_correction(self):
-        # Baseline correction on evoked responses, saves baseline pupil in behav log file
-                      
-        # loop through each type of event to lock events to...
+        """Baseline correction on evoked responses, per trial. 
+        
+        Notes
+        -----
+        Saves baselines per trial in separate file.
+        """
         for t,time_locked in enumerate(self.time_locked):
             pupil_step_lim = self.pupil_step_lim[t]
 

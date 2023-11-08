@@ -1,10 +1,17 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-Letter-color associations formed through statistical learning in the visual modality
-"Letter-color visual 2AFC task" for short
-Python code by O.Colizoli 2022
+================================================
+Pupil dilation offers a time-window in prediction error
+
+Data set #2 Letter-color 2AFC task - Higher Level Functions
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
 Python 3.6
+
+Notes
+-----
+>>> conda install -c conda-forge/label/gcc7 mne
+================================================
 """
 
 import os, sys, datetime
@@ -19,25 +26,34 @@ import pandas as pd
 import mne
 import re
 from statsmodels.stats.anova import AnovaRM
-
-#conda install -c conda-forge/label/gcc7 mne
 from copy import deepcopy
 import itertools
-# import pingouin as pg # stats package
-# from pingouin import pairwise_ttests
-
 from IPython import embed as shell # for debugging only
 
 
+""" Plotting Format
+############################################
+# PLOT SIZES: (cols,rows)
+# a single plot, 1 row, 1 col (2,2)
+# 1 row, 2 cols (2*2,2*1)
+# 2 rows, 2 cols (2*2,2*2)
+# 2 rows, 3 cols (2*3,2*2)
+# 1 row, 4 cols (2*4,2*1)
+# Nsubjects rows, 2 cols (2*2,Nsubjects*2)
+
+############################################
+# Define parameters
+############################################
+"""
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'axes.linewidth': 1, 
     'axes.labelsize': 7, 
     'axes.titlesize': 7, 
-    'xtick.labelsize': 6, 
-    'ytick.labelsize': 6, 
-    'legend.fontsize': 6, 
+    'xtick.labelsize': 7, 
+    'ytick.labelsize': 7, 
+    'legend.fontsize': 7, 
     'xtick.major.width': 1, 
     'ytick.major.width': 1,
     'text.color': 'Black',
@@ -46,12 +62,64 @@ sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'ytick.color':'Black',} )
 sns.plotting_context()
 
-############################################
-# Define parameters
-############################################
 
 class higherLevel(object):
+    """Define a class for the higher level analysis.
+
+    Parameters
+    ----------
+    subjects : list
+        List of subject numbers
+    experiment_name : string
+        Name of the experiment for output files
+    project_directory : str
+        Path to the derivatives data directory
+    sample_rate : int
+        Sampling rate of pupil measurements in Hertz
+    time_locked : list
+        List of strings indiciting the events for time locking that should be analyzed (e.g., ['cue_locked','target_locked'])
+    pupil_step_lim : list 
+        List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] )
+    baseline_window : float
+        Number of seconds before each event in self.time_locked that are averaged for baseline correction
+    pupil_time_of_interest : list
+        List of arrays indicating the time windows in seconds in which to average evoked responses, per event in self.time_locked, see in higher.plot_evoked_pupil (e.g., [[1.0,2.0],[1.0,2.0]])
+    freq_cond : str
+        Frequency condition of interest ('frequency' or 'actual_frequency')
+
+    Attributes
+    ----------
+    subjects : list
+        List of subject numbers
+    exp : string
+        Name of the experiment for output files
+    project_directory : str
+        Path to the derivatives data directory
+    figure_folder : str
+        Path to the figure directory
+    dataframe_folder : str
+        Path to the dataframe directory
+    trial_bin_folder : str
+        Path to the trial bin directory for conditions 
+    jasp_folder : str
+        Path to the jasp directory for stats
+    freq_cond : str
+        Frequency condition of interest ('frequency' or 'actual_frequency')
+    sample_rate : int
+        Sampling rate of pupil measurements in Hertz
+    time_locked : list
+        List of strings indiciting the events for time locking that should be analyzed (e.g., ['cue_locked','target_locked'])
+    pupil_step_lim : list 
+        List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] )
+    baseline_window : float
+        Number of seconds before each event in self.time_locked that are averaged for baseline correction
+    pupil_time_of_interest : list
+        List of arrays indicating the time windows in seconds in which to average evoked responses, per event in self.time_locked, see in higher.plot_evoked_pupil (e.g., [[1.0,2.0],[1.0,2.0]])
+    """
+    
     def __init__(self, subjects, experiment_name, project_directory, sample_rate, time_locked, pupil_step_lim, baseline_window, pupil_time_of_interest, freq_cond):        
+        """Constructor method
+        """
         self.subjects           = subjects
         self.exp                = experiment_name
         self.project_directory  = project_directory
@@ -59,8 +127,15 @@ class higherLevel(object):
         self.dataframe_folder   = os.path.join(project_directory, 'data_frames')
         self.trial_bin_folder   = os.path.join(self.dataframe_folder,'trial_bins_pupil') # for average pupil in different trial bin windows
         self.jasp_folder        = os.path.join(self.dataframe_folder,'jasp') # for dataframes to input into JASP
-        
         self.freq_cond          = freq_cond # determines how to group the conditions based on actual frequencies
+        ##############################    
+        # Pupil time series information:
+        ##############################
+        self.sample_rate        = sample_rate
+        self.time_locked        = time_locked
+        self.pupil_step_lim     = pupil_step_lim                
+        self.baseline_window    = baseline_window              
+        self.pupil_time_of_interest = pupil_time_of_interest
         
         if not os.path.isdir(self.figure_folder):
             os.mkdir(self.figure_folder)
@@ -73,19 +148,25 @@ class higherLevel(object):
             
         if not os.path.isdir(self.jasp_folder):
             os.mkdir(self.jasp_folder)
-            
-        ##############################    
-        # Pupil time series information:
-        ##############################
-        self.sample_rate        = sample_rate
-        self.time_locked        = time_locked
-        self.pupil_step_lim     = pupil_step_lim                
-        self.baseline_window    = baseline_window              
-        self.pupil_time_of_interest = pupil_time_of_interest
-
+    
     
     def tsplot(self, ax, data, alpha_fill=0.2, alpha_line=1, **kw):
-        # replacing seaborn tsplot
+        """Time series plot replacing seaborn tsplot
+            
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.AxesSubplot
+            The subplot handle to plot in
+
+        data : array
+            The data in matrix of format: subject x timepoints
+
+        alpha_line : int
+            The thickness of the mean line (default 1)
+
+        kw : list
+            Optional keyword arguments for matplotlib.plot().
+        """
         x = np.arange(data.shape[1])
         est = np.mean(data, axis=0)
         sd = np.std(data, axis=0)
@@ -103,7 +184,24 @@ class higherLevel(object):
     
     
     def bootstrap(self, data, n_boot=10000, ci=68):
-        # bootstrap confidence interval for new tsplot
+        """Bootstrap confidence interval for new tsplot.
+        
+        Parameters
+        ----------
+        data : array
+            The data in matrix of format: subject x timepoints
+
+        n_boot : int
+            Number of iterations for bootstrapping
+
+        ci : int
+            Confidence interval range
+
+        Returns
+        -------
+        (s1,s2) : tuple
+            Confidence interval.
+        """
         boot_dist = []
         for i in range(int(n_boot)):
             resampler = np.random.randint(0, data.shape[0], data.shape[0])
@@ -115,9 +213,35 @@ class higherLevel(object):
         return (s1,s2)
 
 
-    # common functions
     def cluster_sig_bar_1samp(self, array, x, yloc, color, ax, threshold=0.05, nrand=5000, cluster_correct=True):
-        # permutation-based cluster correction on time courses, then plots the stats as a bar in yloc
+        """Add permutation-based cluster-correction bar on time series plot.
+        
+        Parameters
+        ----------
+        array : array
+            The data in matrix of format: subject x timepoints
+
+        x : array
+            x-axis of plot
+
+        yloc : int
+            Location on y-axis to draw bar
+
+        color : string
+            Color of bar
+
+        ax : matplotlib.axes._subplots.AxesSubplot
+            The subplot handle to plot in
+
+        threshold : float
+            Alpha value for p-value significance (default 0.05)
+
+        nrand : int 
+            Number of permutations (default 5000)
+
+        cluster_correct : bool 
+            Perform cluster-based multiple comparison correction if True (default True).
+        """
         if yloc == 1:
             yloc = 10
         if yloc == 2:
@@ -158,9 +282,33 @@ class higherLevel(object):
 
 
     def timeseries_fdr_correction(self,  xind, color, ax, pvals, alpha=0.05, method='negcorr'):
-        # FDR correction on pvals, plot on corrected (black) and uncorrected (purple) on timecourse
-        # https://mne.tools/stable/generated/mne.stats.fdr_correction.html
+        """Add False Discovery Rate-based correction bar on time series plot.
+        
+        Parameters
+        ----------
+        xind : array
+            x indices of plat
+        
+        color : string
+            Color of bar
 
+        ax : matplotlib.axes._subplots.AxesSubplot
+            The subplot handle to plot in
+        
+        pvals : array
+            Input for FDR correction
+        
+        alpha : float
+            Alpha value for p-value significance (default 0.05)
+
+        method : 'negcorr' 
+            Method for FDR correction (default 'negcorr')
+        
+        Notes
+        -----
+        Plot corrected (black) and uncorrected (purple) on timecourse
+        https://mne.tools/stable/generated/mne.stats.fdr_correction.html
+        """
         # UNCORRECTED
         yloc = 5
         sig_indices = np.array(pvals < alpha, dtype=int)
@@ -194,10 +342,12 @@ class higherLevel(object):
         
     
     def higherlevel_get_phasics(self,):
-        # computes phasic pupil in selected time window per trial
-        # adds phasics to behavioral data frame
-        # loop through subjects' log files
+        """Computes phasic pupil (evoked average) in selected time window per trial and add phasics to behavioral data frame. 
         
+        Notes
+        -----
+        Overwrites original log file (this_log).
+        """
         for s,subj in enumerate(self.subjects):
             this_log = os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)) # derivatives folder
             B = pd.read_csv(this_log) # behavioral file
@@ -242,12 +392,14 @@ class higherLevel(object):
         
         
     def create_subjects_dataframe(self,blocks):
-        # concatenates all subjects into a single dataframe
-        # flags missing trials from concantenated dataframe
-        # counts missing trials and outliers
-        # merge with actual frequencies
+        """Combine behavior and phasic pupil dataframes of all subjects into a single large dataframe. 
         
-        # output all subjects' data
+        Notes
+        -----
+        Flag missing trials from concantenated dataframe.
+        Output in dataframe folder: task-experiment_name_subjects.csv
+        Merge with actual frequencies
+        """
         DF = pd.DataFrame()
         
         # loop through subjects, get behavioral log files
@@ -301,10 +453,13 @@ class higherLevel(object):
         
         
     def average_conditions(self, ):
-        # averages the phasic pupil per subject PER CONDITION 
-        # saves separate dataframes for the different combinations of factors
-        # self.freq_cond argument determines how the trials were split on the basis of actual_frequencies
-                
+        """Average the phasic pupil per subject per condition of interest. 
+
+        Notes
+        -----
+        Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
+        self.freq_cond argument determines how the trials were split
+        """     
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
         DF.sort_values(by=['subject','trial_num'],inplace=True)
@@ -369,9 +524,14 @@ class higherLevel(object):
 
 
     def plot_phasic_pupil_pe(self,):
-        # Phasic pupil feed_locked interaction frequency and accuracy
-        # GROUP LEVEL DATA
-        # separate lines for correct, x-axis is mapping conditions
+        """Plot the phasic pupil target_locked interaction frequency and accuracy in each trial bin window.
+        
+        Notes
+        -----
+        4 figures: per DV
+        GROUP LEVEL DATA
+        Separate lines for correct, x-axis is frequency conditions.
+        """
         ylim = [ 
             [-1.5,6.5], # t1
             [-3.25,2.25], # t2
@@ -429,9 +589,14 @@ class higherLevel(object):
         
         
     def plot_behavior(self,):
-        # plots the group level means of accuracy and RT per mapping condition
-        # whole figure, 2 subplots
-        
+        """Plot the group level means of accuracy and RT per mapping condition.
+
+        Notes
+        -----
+        GROUP LEVEL DATA
+        x-axis is frequency conditions.
+        Figure output as PDF in figure folder.
+        """
         #######################
         # Frequency
         #######################
@@ -489,7 +654,12 @@ class higherLevel(object):
     
     
     def individual_differences(self,):
-       # correlate interaction term in pupil with frequency effect in accuracy
+       """Correlate frequency effect in pupil DV with frequency effect in accuracy across participants, then plot.
+       
+       Notes
+       -----
+       3 figures: 1 per pupil DV
+       """
        dvs = ['pupil_feed_locked_t1', 'pupil_feed_locked_t2', 'pupil_baseline_feed_locked']
               
        for sp,pupil_dv in enumerate(dvs):
@@ -528,7 +698,12 @@ class higherLevel(object):
        
     
     def confound_rt_pupil(self,):
-        # single-trial correlation between RT and pupil_dvs, subject and group level
+        """Compute single-trial correlation between RT and pupil_dvs, subject and group level
+       
+        Notes
+        -----
+        Plots a random subject.
+        """
         dvs = ['pupil_feed_locked_t1', 'pupil_feed_locked_t2', 'pupil_baseline_feed_locked']
         DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
         for sp, pupil_dv in enumerate(dvs):
@@ -569,7 +744,12 @@ class higherLevel(object):
 
 
     def confound_baseline_phasic(self,):
-        # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
+        """Compute single-trial correlation between feedback_baseline and phasic t1 and t2.
+       
+        Notes
+        -----
+        Plots a random subject.
+        """
         dvs = ['pupil_feed_locked_t1', 'pupil_feed_locked_t2']
         DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
         for sp, pupil_dv in enumerate(dvs):
@@ -610,9 +790,16 @@ class higherLevel(object):
     
     
     def dataframe_evoked_pupil_higher(self):
-        # Evoked pupil responses, split by factors and save as higher level dataframe
-        # Need to combine evoked files with behavioral data frame, looping through subjects
-        # DROP OMISSIONS (in subject loop)
+        """Compute evoked pupil responses.
+        
+        Notes
+        -----
+        Split by conditions of interest. Save as higher level dataframe per condition of interest. 
+        Evoked dataframes need to be combined with behavioral data frame, looping through subjects. 
+        DROP PHASE 2 trials.
+        Drop omission trials (in subject loop).
+        Output in dataframe folder.
+        """
         
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
@@ -653,10 +840,13 @@ class higherLevel(object):
     
     
     def plot_evoked_pupil(self):
-        # plots evoked pupil 2 subplits
-        # plots the group level mean for target_locked
-        # plots the group level accuracy x mapping interaction for target_locked
-
+        """Plot evoked pupil time courses.
+        
+        Notes
+        -----
+        4 figures: mean response, accuracy, frequency, accuracy*frequency.
+        Always feed_locked pupil response.
+        """
         ylim_feed = [-3,8]
         tick_spacer = 3
         

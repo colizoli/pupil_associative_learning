@@ -1,11 +1,17 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# LISA VERSION
+# encoding: utf-8
 """
-Letter-color associations formed through statistical learning in the visual modality
-"Letter-color visual 2AFC task" for short
-Python code by O.Colizoli 2022
+================================================
+Pupil dilation offers a time-window in prediction error
+
+Data set #2 Letter-color 2AFC task - RUN ANALYSIS HERE
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
 Python 3.6
+
+Notes
+-----
+>> conda install matplotlib # fixed the matplotlib crashing error in 3.6
+================================================
 """
 
 ############################################################################
@@ -23,12 +29,12 @@ from IPython import embed as shell # for debugging
 # Need to have the EYELINK software installed on the terminal
 
 # -----------------------
-# Levels
+# Levels (toggle True/False)
 # ----------------------- 
 training        = False  # process the logfiles and average the performance on the odd-ball training task
 pre_process     = False  # pupil preprocessing is done on entire time series during the 2AFC decision task
 trial_process   = False  # cut out events for each trial and calculate trial-wise baselines, baseline correct evoked responses (2AFC decision)
-higher_level    = True   # all subjects' dataframe, pupil and behavior higher level analyses & figures (2AFC decision)
+higher_level    = False   # all subjects' dataframe, pupil and behavior higher level analyses & figures (2AFC decision)
  
 # -----------------------
 # Paths
@@ -48,7 +54,7 @@ else:
 # -----------------------
 # Participants
 # -----------------------
-ppns     = pd.read_csv(os.path.join(home_dir,'derivatives','participants.csv'))
+ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants.csv'))
 subjects = ['sub-{}'.format(s) for s in ppns['subject']]
 
 # -----------------------
@@ -68,7 +74,7 @@ if training:
 # -----------------------
 # Event-locked pupil parameters (shared)
 # -----------------------
-msgs                    = ['start recording', 'stop recording','phase 1','phase 7']; # this will change for each task (keep phase 1 for locking to breaks)
+msgs                    = ['start recording', 'stop recording', 'phase 1', 'phase 7']; # this will change for each task (keep phase 1 for locking to breaks)
 phases                  = ['phase 7'] # of interest for analysis
 time_locked             = ['feed_locked'] # events to consider (note: these have to match phases variable above)
 baseline_window         = 0.5 # seconds before event of interest
@@ -88,7 +94,7 @@ if pre_process:
     threshold = 0       # detect peaks (valleys) that are greater (smaller) than `threshold` in relation to their immediate neighbors
 
     for s,subj in enumerate(subjects):
-        edf = '{}_{}_recording-eyetracking_physio'.format(subj,experiment_name)
+        edf = '{}_{}_recording-eyetracking_physio'.format(subj, experiment_name)
 
         pupilPreprocess = pupil_preprocessing.pupilPreprocess(
             subject             = subj,
@@ -114,7 +120,7 @@ if pre_process:
 if trial_process:  
     # process 1 subject at a time
     for s,subj in enumerate(subjects):
-        edf = '{}_{}_recording-eyetracking_physio'.format(subj,experiment_name)
+        edf = '{}_{}_recording-eyetracking_physio'.format(subj, experiment_name)
         trialLevel = pupil_preprocessing.trials(
             subject             = subj,
             edf                 = edf,
@@ -140,11 +146,11 @@ if higher_level:
         time_locked             = time_locked,
         pupil_step_lim          = pupil_step_lim,                
         baseline_window         = baseline_window,              
-        pupil_time_of_interest  = [[[0.75,1.25],[2.5,3.0]]], # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
+        pupil_time_of_interest  = [[[0.75,1.25], [2.5,3.0]]], # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
         freq_cond               = 'frequency'   # determines how to group the conditions based on actual frequencies
         )
     higherLevel.higherlevel_get_phasics()       # computes phasic pupil for each subject (adds to log files)
-    higherLevel.create_subjects_dataframe(blocks=break_trials+[240])  # add baselines, concantenates all subjects, flags missed trials, saves higher level data frame
+    higherLevel.create_subjects_dataframe(blocks = break_trials+[240])  # add baselines, concantenates all subjects, flags missed trials, saves higher level data frame
     ''' Note: the functions after this are using: task-letter_color_visual_decision_subjects.csv
     '''
     higherLevel.average_conditions()           # group level data frames for all main effects + interaction

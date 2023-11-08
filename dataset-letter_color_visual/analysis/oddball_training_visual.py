@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-Training (Odd-ball Task) for letter-color associations formed through statistical learning in the visual modality
-"Training letter-color visual 2AFC task" for short
-Python code by O.Colizoli 2022
+================================================
+Pupil dilation offers a time-window in prediction error
+
+Data set #2 Odd-ball task (independent learning phase) - Higher Level Functions
+Python code O.Colizoli 2023 (olympia.colizoli@donders.ru.nl)
 Python 3.6
+
+================================================
 """
 
 import os, sys
@@ -13,18 +17,32 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-
 from IPython import embed as shell # for debugging
 
+
+""" Plotting Format
+############################################
+# PLOT SIZES: (cols,rows)
+# a single plot, 1 row, 1 col (2,2)
+# 1 row, 2 cols (2*2,2*1)
+# 2 rows, 2 cols (2*2,2*2)
+# 2 rows, 3 cols (2*3,2*2)
+# 1 row, 4 cols (2*4,2*1)
+# Nsubjects rows, 2 cols (2*2,Nsubjects*2)
+
+############################################
+# Define parameters
+############################################
+"""
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'axes.linewidth': 1, 
     'axes.labelsize': 7, 
     'axes.titlesize': 7, 
-    'xtick.labelsize': 6, 
-    'ytick.labelsize': 6, 
-    'legend.fontsize': 6, 
+    'xtick.labelsize': 7, 
+    'ytick.labelsize': 7, 
+    'legend.fontsize': 7, 
     'xtick.major.width': 1, 
     'ytick.major.width': 1,
     'text.color': 'Black',
@@ -33,12 +51,38 @@ sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'ytick.color':'Black',} )
 sns.plotting_context()
 
-############################################
-# Define parameters
-############################################
 
 class higherLevel(object):
+    """Define a class for the higher level analysis.
+
+    Parameters
+    ----------
+    subjects : list
+        List of subject numbers
+    experiment_name : string
+        Name of the experiment for output files
+    project_directory : str
+        Path to the derivatives data directory
+
+    Attributes
+    ----------
+    subjects : list
+        List of subject numbers
+    exp : string
+        Name of the experiment for output files
+    project_directory : str
+        Path to the derivatives data directory
+    figure_folder : str
+        Path to the figure directory
+    dataframe_folder : str
+        Path to the dataframe directory
+    jasp_folder : str
+        Path to the jasp directory for stats
+    """
+    
     def __init__(self, subjects, experiment_name, project_directory):        
+        """Constructor method
+        """
         self.subjects           = subjects
         self.exp                = experiment_name
         self.project_directory  = project_directory
@@ -55,11 +99,15 @@ class higherLevel(object):
         if not os.path.isdir(self.jasp_folder):
             os.mkdir(self.jasp_folder)
                     
+                    
     def create_subjects_dataframe(self,):
-        # creates a single data frame from all subjects
-        # flags missed trials
+        """Combine behavior and phasic pupil dataframes of all subjects into a single large dataframe. 
         
-        # output all subjects' data
+        Notes
+        -----
+        Flag missing trials from concantenated dataframe.
+        Output in dataframe folder: task-experiment_name_subjects.csv
+        """
         DF = pd.DataFrame()
         
         files = []
@@ -90,9 +138,15 @@ class higherLevel(object):
         #####################
         print('success: create_subjects_dataframe')
         
-    def average_conditions(self):
-        # drop missed trials, calculate mean accuracy, and RT grouped by frequency, and subject, then also by blocks
         
+    def average_conditions(self):
+        """Average the DVs per subject per condition of interest. 
+
+        Notes
+        -----
+        Save separate dataframes for the different combinations of factors, in jasp folders for statistical testing.
+        Drop missed trials.
+        """
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         
         #####################
@@ -112,7 +166,14 @@ class higherLevel(object):
         print('success: average_conditions')
         
     def plot_behav(self):
-        # plots the accuracy and RT during the odd-ball task, 2 subplots
+        """Plot the group level means of accuracy and RT per odd-ball condition.
+
+        Notes
+        -----
+        GROUP LEVEL DATA
+        x-axis is odd-ball conditions.
+        Figure output as PDF in figure folder.
+        """
         #######################
         # Oddball
         #######################
@@ -175,9 +236,12 @@ class higherLevel(object):
         
         
     def calculate_actual_frequencies(self):
-        # calculate the actual frequencies of the pairs presented during the oddball task
-        # 10 trials x 10 reps = 100 trials PER letter PER frequency condition in the training task
-        
+        """Calculate the actual frequencies of the pairs presented during the oddball task.
+
+        Notes
+        -----
+        10 trials x 10 reps = 100 trials PER letter PER frequency condition in the training task.
+        """
         letter_trials = 100 # how many trials per letter in the training task
         
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))

@@ -26,7 +26,7 @@ import higher_level_functions_orientation as higher
 # ----------------------- 
 pre_process     = False # pupil preprocessing is done on entire time series
 trial_process   = False # cut out events for each trial and calculate trial-wise baselines, baseline correct evoked responses
-higher_level    = False  # all subjects' dataframe, pupil and behavior higher level analyses & figures
+higher_level    = True  # all subjects' dataframe, pupil and behavior higher level analyses & figures
 
 # -----------------------
 # Paths
@@ -123,22 +123,25 @@ if higher_level:
         pupil_time_of_interest  = [[[0.75, 1.25], [2.5, 3.0]]] # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil     
         )
 
-    higherLevel.higherlevel_log_conditions()     # computes mappings, accuracy, and missing trials
-    higherLevel.higherlevel_get_phasics()        # computes phasic pupil for each subject (adds to log files)
-    higherLevel.create_subjects_dataframe()      # adds baseline pupil, combines all subjects' behavioral files: task-predictions_subjects.csv, flags outliers, drops phase 2 trials
+    # higherLevel.higherlevel_log_conditions()     # computes mappings, accuracy, and missing trials
+    # higherLevel.higherlevel_get_phasics()        # computes phasic pupil for each subject (adds to log files)
+    # higherLevel.create_subjects_dataframe()      # adds baseline pupil, combines all subjects' behavioral files: task-predictions_subjects.csv, flags outliers, drops phase 2 trials
     ''' Note: the functions after this are using: task-cue_target_orientation_subjects.csv
     '''
     ''' DV averages within bin windows
     '''
-    higherLevel.average_conditions()           # group level data frames for all main effects + interaction
-    higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
-    higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
-    higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
-    higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
-    higherLevel.confound_baseline_phasic()     # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
+    # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
+    # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
+    # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
+    # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
+    # higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
+    # higherLevel.confound_baseline_phasic()     # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
     
     ''' Evoked pupil response
     '''
-    higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    
+    # higherLevel.information_theory_estimates()
+    higherLevel.pupil_information_correlation()
      

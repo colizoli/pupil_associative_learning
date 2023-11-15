@@ -23,6 +23,7 @@ import pandas as pd
 import mne
 import scipy as sp
 import scipy.stats as stats
+
 from copy import deepcopy
 from IPython import embed as shell # used for debugging
 
@@ -1147,4 +1148,152 @@ class higherLevel(object):
         plt.tight_layout()
         fig.savefig(os.path.join(self.figure_folder,'{}_evoked_{}.pdf'.format(self.exp, csv_name)))
         print('success: plot_evoked_pupil')
+        
+        
+    def information_theory_estimates(self, ):
+        
+        fn_in = os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp))
+        df_in = pd.read_csv(fn_in)
+        # sort by subjects then trial_counter in ascending order
+        df_in.sort_values(by=['subject', 'trial_counter'], ascending=True, inplace=True)
+        
+        df_out = pd.DataFrame()
+        
+        # make new column to give each cue-target combination a unique identifier (1, 2, 3 or 4)        
+        mapping = [
+            # KEEP ORIGINAL MAPPINGS TO SEE 'FLIP'
+            (df_in['cue_ori'] == 0) & (df_in['target_ori'] == 315), # square left
+            (df_in['cue_ori'] == 0) & (df_in['target_ori'] == 45), # sqaure right
+            (df_in['cue_ori'] == 45) & (df_in['target_ori'] == 315), # diamond left
+            (df_in['cue_ori'] == 45) & (df_in['target_ori'] == 45), # diamond right
+            ]
+        
+        elements = [0,1,2,3] # also elements is the same as priors (start with 0 so they can be indexed by element)
+        
+        df_in['cue_target_pair'] = np.select(mapping, elements)
+        
+        # the input to the model is the trial sequence = the order of cue_target_pair for each participant
+        # loop subjects
+        for s,subj in enumerate(self.subjects):
+            
+            # initialize output variables for current subject
+            model_e = [] # trial sequence
+            model_P = [] # probabilities of all elements at each trial
+            model_p = [] # probability of current element at current trial
+            model_I = [] # surprise of all elements at each trial
+            model_i = [] # surprise of current element at current trial
+            model_H = [] # entropy at current trial
+            model_CH = [] # cross-entropy at current trial
+            model_D = []  # KL-divergence at current trial
+
+            # get current subjects data only
+            this_df = df_in[df_in['subject']==subj].copy()
+            data = np.array(this_df['cue_target_pair'])
+            
+            # loop trials
+            for t,trial_counter in enumerate(this_df['trial_counter']):
+                vector = data[:trial_counter] # all the targets that have been seen so far
+                # print(vector)
+                if t < 1: # if it's the first trial, our expectations are based only on the prior (values)
+                    p1 = np.ones(len(elements)) / len(elements)
+                    p = p1
+                    
+                # at every trial, we compute:
+                I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
+                i = I[vector[-1]]   # surprise of the current event (last element in vector)
+                H = np.sum(p*I)     # entropy  (dot product?)
+                
+                # Updated estimated probabilities
+                p = []
+                for element in elements:
+                    # +1 because in the prior there is one element of the same type; +4 because in the prior there are 4 elements
+                    # The influence of the prior should be sampled by a distribution or
+                    # set to a certain value based on Kidd et al. (2012, 2014)
+                    p.append((np.sum(vector==element) + 1) / (len(vector) + len(elements)))                  
+                
+                model_e.append(vector[-1])  # element in current trial = last element in the vector
+                model_P.append(p)           # probability of all elements
+                model_p.append(p[vector[-1]]) # probability of element in current trial
+                model_I.append(I)
+                model_i.append(i)
+                
+                # once we have the updated probabilities, we can compute KL Divergence, Entropy and Cross-Entropy
+                prevtrial = t-1
+                if prevtrial < 0:
+                    D = np.sum(p * (np.log2(p / np.array(p1))));
+                else:
+                    D = np.sum( p * (np.log2(p / np.array(model_P[prevtrial])))) # KL divergence
+                
+                H = np.sum(p * np.log2(p)) # entropy
+                
+                CH = H + D # Cross-entropy
+                
+                model_H.append(H)   # entropy
+                model_CH.append(CH) # cross-entropy
+                model_D.append(D)   # KL divergence
+            
+            # add to subject dataframe
+            this_df['model_p'] = np.array(model_p)
+            this_df['model_i'] = np.array(model_i)
+            this_df['model_H'] = np.array(model_H)
+            this_df['model_CH'] = np.array(model_CH)
+            this_df['model_D'] = np.array(model_D)
+            df_out = pd.concat([df_out, this_df])    # add current subject df to larger df
+        
+        # save whole DF
+        df_out.to_csv(fn_in) # overwrite subjects dataframe
+        print('success: information_theory_estimates')
+
+
+    def pupil_information_correlation(self,):
+        """Compute single-trial correlation between information theory variables and phasic t1 and t2.
+       
+        Notes
+        -----
+        Plots a random subject.
+        """
+        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']
+        model_dvs = ['model_D', 'model_H', 'model_i']
+        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
+        
+        for mdv in model_dvs:
+            for sp, pupil_dv in enumerate(dvs):
+
+                DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+            
+                ############################
+                # drop outliers
+                DF = DF[DF['outlier_rt']==0]
+                ############################
+
+                plot_subject = np.random.randint(0,len(self.subjects)) # plot random subject
+                save_coeff = []
+                for s, subj in enumerate(np.unique(DF['subject'])):
+                    this_df = DF[DF['subject']==subj].copy()
+
+                    x = np.array(this_df[mdv])
+                    y = np.array(this_df[pupil_dv])  
+                    r,pval = stats.pearsonr(x,y)
+                    save_coeff.append(self.fisher_transform(r))
+                
+                    if s==plot_subject:  # plot one random subject
+                        fig = plt.figure(figsize=(2,2))
+                        ax = fig.add_subplot(111)
+                        ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
+                        m, b = np.polyfit(x, y, 1)
+                        ax.plot(x, m*x+b, color='grey',alpha=1)
+                        # set figure parameters
+                        ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
+                        ax.set_ylabel(pupil_dv)
+                        ax.set_xlabel(mdv)
+                        # ax.legend()
+                        plt.tight_layout()
+                        fig.savefig(os.path.join(self.figure_folder,'{}_pupil_information_correlation_{}.pdf'.format(self.exp, pupil_dv)))
+                DFOUT[pupil_dv] = np.array(save_coeff)
+            DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_pupil_information_correlation_{}.csv'.format(self.exp, mdv)))
+        print('success: pupil_information_correlation')
+        
+        
+        
+        
     

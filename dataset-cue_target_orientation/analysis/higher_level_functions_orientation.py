@@ -23,6 +23,7 @@ import pandas as pd
 import mne
 import scipy as sp
 import scipy.stats as stats
+import statsmodels.api as sm
 
 from copy import deepcopy
 from IPython import embed as shell # used for debugging
@@ -529,7 +530,7 @@ class higherLevel(object):
         '''
         ######## CORRECT x MAPPING1 ########
         '''
-        for pupil_dv in ['reaction_time', 'pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']:
+        for pupil_dv in ['reaction_time', 'pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked', 'model_prediction_D', 'model_target_D', 'KL_target-prediction']:
             DFOUT = DF.groupby(['subject','correct','mapping1'])[pupil_dv].mean()
             DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-mapping1_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
             # save for RMANOVA format
@@ -571,8 +572,8 @@ class higherLevel(object):
         ]
         tick_spacer = [1, 1, 2, .2]
         
-        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked', 'reaction_time']
-        ylabels = ['Pupil response\n(% signal change)', 'Pupil response\n(% signal change)', 'Pupil response\n(% signal change)', 'RT (s)']
+        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked', 'reaction_time' , 'model_prediction_D', 'model_target_D', 'KL_target-prediction']
+        ylabels = ['Pupil response\n(% signal change)', 'Pupil response\n(% signal change)', 'Pupil response\n(% signal change)', 'RT (s)', 'model_prediction_D', 'model_target_D', 'KL_target-prediction']
         factor = ['mapping1','correct']
         xlabel = 'Cue-target frequency'
         xticklabels = ['20%','80%'] 
@@ -587,7 +588,7 @@ class higherLevel(object):
             fig = plt.figure(figsize=(2, 2))
             ax = fig.add_subplot(111) # 1 subplot per bin window
             
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_correct*mapping1_{}.csv'.format(self.exp,pupil_dv)))
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_correct-mapping1_{}.csv'.format(self.exp,pupil_dv)))
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
             # Group average per BIN WINDOW
@@ -609,8 +610,8 @@ class higherLevel(object):
             ax.set_xlabel(xlabel)
             ax.set_xticks(xind)
             ax.set_xticklabels(xticklabels)
-            ax.set_ylim(ylim[dvi])
-            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer[dvi]))
+            # ax.set_ylim(ylim[dvi])
+            # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer[dvi]))
             ax.legend()
         
             sns.despine(offset=10, trim=True)
@@ -1149,16 +1150,11 @@ class higherLevel(object):
         fig.savefig(os.path.join(self.figure_folder,'{}_evoked_{}.pdf'.format(self.exp, csv_name)))
         print('success: plot_evoked_pupil')
         
+    
+    def information_theory_code_stimuli(self, fn_in):
         
-    def information_theory_estimates(self, ):
-        
-        fn_in = os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp))
         df_in = pd.read_csv(fn_in)
-        # sort by subjects then trial_counter in ascending order
-        df_in.sort_values(by=['subject', 'trial_counter'], ascending=True, inplace=True)
-        
-        df_out = pd.DataFrame()
-        
+                
         # make new column to give each cue-target combination a unique identifier (1, 2, 3 or 4)        
         mapping = [
             # KEEP ORIGINAL MAPPINGS TO SEE 'FLIP'
@@ -1172,95 +1168,330 @@ class higherLevel(object):
         
         df_in['cue_target_pair'] = np.select(mapping, elements)
         
-        # the input to the model is the trial sequence = the order of cue_target_pair for each participant
+        # make new column to give each cue-prediction combination a unique identifier (1, 2, 3 or 4)        
+        mapping = [
+            # KEEP ORIGINAL MAPPINGS TO SEE 'FLIP'
+            (df_in['cue_ori'] == 0) & (df_in['keypress'] == 'left'), # square left
+            (df_in['cue_ori'] == 0) & (df_in['keypress'] == 'right'), # sqaure right
+            (df_in['cue_ori'] == 45) & (df_in['keypress'] == 'left'), # diamond left
+            (df_in['cue_ori'] == 45) & (df_in['keypress'] == 'right'), # diamond right
+            ]
+        
+        elements = [0,1,2,3] # also elements is the same as priors (start with 0 so they can be indexed by element)
+        
+        df_in['cue_prediction_pair'] = np.select(mapping, elements)
+        
+        df_in.to_csv(fn_in) # save with new columns
+        print('success: information_theory_code_stimuli')
+        
+    
+    def idt_model(self, df, df_data_column, elements):
+        
+        data = np.array(df[df_data_column])
+    
+        # initialize output variables for current subject
+        model_e = [] # trial sequence
+        model_P = [] # probabilities of all elements at each trial
+        model_p = [] # probability of current element at current trial
+        model_I = [] # surprise of all elements at each trial
+        model_i = [] # surprise of current element at current trial
+        model_H = [] # entropy at current trial
+        model_CH = [] # cross-entropy at current trial
+        model_D = []  # KL-divergence at current trial
+    
+        # loop trials
+        for t,trial_counter in enumerate(df['trial_counter']):
+            vector = data[:trial_counter] # all the targets that have been seen so far
+            # print(vector)
+            if t < 1: # if it's the first trial, our expectations are based only on the prior (values)
+                p1 = np.ones(len(elements)) / len(elements)
+                p = p1
+    
+            # print(p)
+            # at every trial, we compute:
+            I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
+            i = I[vector[-1]]   # surprise of the current event (last element in vector)
+            H = np.sum(p*I)     # entropy  (dot product?)
+    
+            # Updated estimated probabilities
+            p = []
+            for element in elements:
+                # +1 because in the prior there is one element of the same type; +4 because in the prior there are 4 elements
+                # The influence of the prior should be sampled by a distribution or
+                # set to a certain value based on Kidd et al. (2012, 2014)
+                p.append((np.sum(vector == element) + 1) / (len(vector) + len(elements)))                  
+    
+            model_e.append(vector[-1])  # element in current trial = last element in the vector
+            model_P.append(p)           # probability of all elements
+            model_p.append(p[vector[-1]]) # probability of element in current trial
+            model_I.append(I)
+            model_i.append(i)
+    
+            # once we have the updated probabilities, we can compute KL Divergence, Entropy and Cross-Entropy
+            prevtrial = t-1
+            if prevtrial < 0:
+                D = np.sum(p * (np.log2(p / np.array(p1))));
+            else:
+                D = np.sum(p * (np.log2(p / np.array(model_P[prevtrial])))) # KL divergence
+    
+            H = np.sum(p * np.log2(p)) # entropy
+    
+            CH = H + D # Cross-entropy
+    
+            model_H.append(H)   # entropy
+            model_CH.append(CH) # cross-entropy
+            model_D.append(D)   # KL divergence
+        
+        return [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D]
+        
+        
+    def information_theory_estimates(self, ):
+        # https://github.com/FrancescPoli/eye_processing/blob/master/ITDmodel.m
+        
+        elements = [0,1,2,3]
+        
+        fn_in = os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp))
+        self.information_theory_code_stimuli(fn_in) # code stimuli based on predictions and based on targets
+
+        df_in = pd.read_csv(fn_in)
+        df_in = df_in.loc[:, ~df_in.columns.str.contains('^Unnamed')]
+        # sort by subjects then trial_counter in ascending order
+        df_in.sort_values(by=['subject', 'trial_counter'], ascending=True, inplace=True)
+        
+        df_out = pd.DataFrame()
+        
         # loop subjects
         for s,subj in enumerate(self.subjects):
             
-            # initialize output variables for current subject
-            model_e = [] # trial sequence
-            model_P = [] # probabilities of all elements at each trial
-            model_p = [] # probability of current element at current trial
-            model_I = [] # surprise of all elements at each trial
-            model_i = [] # surprise of current element at current trial
-            model_H = [] # entropy at current trial
-            model_CH = [] # cross-entropy at current trial
-            model_D = []  # KL-divergence at current trial
-
             # get current subjects data only
             this_df = df_in[df_in['subject']==subj].copy()
-            data = np.array(this_df['cue_target_pair'])
             
-            # loop trials
-            for t,trial_counter in enumerate(this_df['trial_counter']):
-                vector = data[:trial_counter] # all the targets that have been seen so far
-                # print(vector)
-                if t < 1: # if it's the first trial, our expectations are based only on the prior (values)
-                    p1 = np.ones(len(elements)) / len(elements)
-                    p = p1
-                    
-                # at every trial, we compute:
-                I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
-                i = I[vector[-1]]   # surprise of the current event (last element in vector)
-                H = np.sum(p*I)     # entropy  (dot product?)
+            # the input to the model is the trial sequence = the order of cue_target/prediction_pair for each participant
+            # loop through stimuli coding for predictions then targets
+            column_names = ['model_prediction', 'model_target']
+            for cname, pair in enumerate(['cue_prediction_pair', 'cue_target_pair']):
                 
-                # Updated estimated probabilities
-                p = []
-                for element in elements:
-                    # +1 because in the prior there is one element of the same type; +4 because in the prior there are 4 elements
-                    # The influence of the prior should be sampled by a distribution or
-                    # set to a certain value based on Kidd et al. (2012, 2014)
-                    p.append((np.sum(vector==element) + 1) / (len(vector) + len(elements)))                  
+                [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D] = self.idt_model(this_df, pair, elements)
                 
-                model_e.append(vector[-1])  # element in current trial = last element in the vector
-                model_P.append(p)           # probability of all elements
-                model_p.append(p[vector[-1]]) # probability of element in current trial
-                model_I.append(I)
-                model_i.append(i)
-                
-                # once we have the updated probabilities, we can compute KL Divergence, Entropy and Cross-Entropy
-                prevtrial = t-1
-                if prevtrial < 0:
-                    D = np.sum(p * (np.log2(p / np.array(p1))));
-                else:
-                    D = np.sum( p * (np.log2(p / np.array(model_P[prevtrial])))) # KL divergence
-                
-                H = np.sum(p * np.log2(p)) # entropy
-                
-                CH = H + D # Cross-entropy
-                
-                model_H.append(H)   # entropy
-                model_CH.append(CH) # cross-entropy
-                model_D.append(D)   # KL divergence
-            
-            # add to subject dataframe
-            this_df['model_p'] = np.array(model_p)
-            this_df['model_i'] = np.array(model_i)
-            this_df['model_H'] = np.array(model_H)
-            this_df['model_CH'] = np.array(model_CH)
-            this_df['model_D'] = np.array(model_D)
+                # add to subject dataframe
+                if 'target' in pair:
+                    this_df['{}_i'.format(column_names[cname])] = np.array(model_i)
+                    this_df['{}_H'.format(column_names[cname])] = np.array(model_H)
+                this_df['{}_D'.format(column_names[cname])] = np.array(model_D)
             df_out = pd.concat([df_out, this_df])    # add current subject df to larger df
+        
+        # Compute difference between KL_prediction and KL_target
+        df_out['KL_target-prediction'] = df_out['model_target_D'] - df_out['model_prediction_D']
         
         # save whole DF
         df_out.to_csv(fn_in) # overwrite subjects dataframe
         print('success: information_theory_estimates')
 
 
+    def pupil_information_regression(self,):
+        # regress information variables on pupil data 
+        # demean all data
+        
+        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2']
+        # ivs = ['model_target_i', 'model_target_H', 'KL_target-prediction']
+        # ivs = ['model_target_i', 'model_target_H', 'model_target_D']
+        # ivs = ['model_target_i', 'KL_target-prediction']
+        ivs = ['KL_target-prediction']
+        
+        
+        for sp, pupil_dv in enumerate(dvs):
+
+            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+
+            ############################
+            # drop outliers
+            DF = DF[DF['outlier_rt']==0]
+            ############################
+            
+            df_out = pd.DataFrame()
+            save_betas_i = []
+            save_betas_H = []
+            save_betas_D = []
+            
+            # loop subjects
+            for s, subj in enumerate(np.unique(DF['subject'])):
+                # get current subject's data only
+                this_df = DF[DF['subject']==subj].copy()
+                
+                ################ MODEL: 'pupil ~ constant + surprise + entropy + KLdivergence(target-prediction)'
+                Y = np.array(this_df[pupil_dv]) # pupil
+                X = this_df[ivs]
+                
+                # normalize variables
+                # Y = stats.zscore(Y)
+                # X = stats.zscore(X)
+                
+                X = sm.add_constant(X)
+                
+                
+                
+                # ordinary least squares linear regression
+                model = sm.OLS(Y, X)
+                results = model.fit()
+                
+                # save_betas_i.append(results.params[0]) # beta surprise
+                # save_betas_H.append(results.params[1]) # beta entropy
+                save_betas_D.append(results.params[-1]) # beta KLdivergence (target-prediction)
+            
+            # df_out['betas_i'] = np.array(save_betas_i)
+            # df_out['betas_H'] = np.array(save_betas_H)
+            df_out['betas_D'] = np.array(save_betas_D)
+            
+            df_out.to_csv(os.path.join(self.jasp_folder, '{}_pupil_information_regress_normalized_betas_{}.csv'.format(self.exp, pupil_dv)))
+            
+        print('success: pupil_information_regression')
+                
+
+    def dataframe_evoked_regression(self):
+        """Compute evoked pupil responses.
+        
+        Notes
+        -----
+        DROP PHASE 2 trials.
+        Drop omission trials (in subject loop).
+        Output in dataframe folder.
+        """
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
+        
+        ivs = ['model_target_i', 'model_target_H', 'model_target_D', 'model_prediction_D', 'KL_target-prediction']
+
+        df_out = pd.DataFrame() # timepoints x subjects
+        for t,time_locked in enumerate(self.time_locked):
+            # Loop through IVs                
+            for i,iv in enumerate(ivs):
+                # loop subjects
+                
+                for s,subj in enumerate(self.subjects):
+                    SBEHAV = DF[DF['subject']==subj].reset_index()
+                    SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked))))
+                    SPUPIL = SPUPIL.loc[:, ~SPUPIL.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+                    #############################
+                    # DROP THE LAST 200 trials from evoked DF
+                    SPUPIL = SPUPIL.iloc[:200,:]
+                    
+                    # merge behavioral and evoked dataframes so we can group by conditions
+                    SDATA = pd.concat([SBEHAV,SPUPIL],axis=1)
+                    
+                    #### DROP OMISSIONS HERE ####
+                    SDATA = SDATA[SDATA['outlier_rt'] == 0] # drop outliers based on RT
+                    #############################
+                    
+                    evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
+                    
+                    save_timepoint_betas = []
+                    # loop timepoints, regress
+                    for col in evoked_cols:
+                        Y = np.array(SDATA[col]) # pupil
+                        X = SDATA[iv]
+                        
+                        Y = stats.zscore(Y)
+                        X = stats.zscore(X)
+                        
+                        X = sm.add_constant(X)
+
+                        # ordinary least squares linear regression
+                        model = sm.OLS(Y, X)
+                        results = model.fit()
+                        save_timepoint_betas.append(results.params[-1])
+                    # add column for each subject with timepoints as rows
+                    df_out[subj] = np.array(save_timepoint_betas)
+                    
+                # save output file
+                df_out.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_regression_betas_{}.csv'.format(self.exp, time_locked, iv)))
+        print('success: dataframe_evoked_regression')
+        
+        
+    def plot_pupil_information_regression_evoked(self):
+        """Plot evoked pupil time courses.
+        
+        Notes
+        -----
+        Always target_locked pupil response.
+        """
+        ylim_feed = [-2.5,2.5]
+        tick_spacer = 2.5
+        
+        ivs = ['model_target_i', 'model_target_H', 'model_target_D', 'model_prediction_D', 'KL_target-prediction']
+    
+        # xticklabels = ['mean response']
+        colors = ['red', 'orange', 'green' , 'blue' , 'purple'] # black
+        alphas = [1]
+        
+        #######################
+        # FEEDBACK PLOT BETAS FOR EACH MODEL DV
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        factor = 'subject'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+                
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        for i,iv in enumerate(ivs):
+            # Compute means, sems across group
+            COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_regression_betas_{}.csv'.format(self.exp, time_locked, iv)))
+            COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+
+            # plot time series
+            TS = np.array(COND.T) # flip so subjects are rows
+            self.tsplot(ax, TS, color=colors[i], label=iv)
+            self.cluster_sig_bar_1samp(array=TS, x=pd.Series(range(TS.shape[-1])), yloc=1+i, color=colors[i], ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+    
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+            
+        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Beta coefficient')
+        ax.set_title(time_locked)
+        ax.legend()
+        
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_evoked_regression_betas.pdf'.format(self.exp)))
+        
+        
     def pupil_information_correlation(self,):
         """Compute single-trial correlation between information theory variables and phasic t1 and t2.
-       
+
         Notes
         -----
         Plots a random subject.
         """
         dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']
-        model_dvs = ['model_D', 'model_H', 'model_i']
-        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
-        
+        model_dvs = ['model_prediction_D', 'model_target_D', 'KL_target-prediction']
+        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)
+
         for mdv in model_dvs:
             for sp, pupil_dv in enumerate(dvs):
 
                 DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-            
+
                 ############################
                 # drop outliers
                 DF = DF[DF['outlier_rt']==0]
@@ -1272,10 +1503,10 @@ class higherLevel(object):
                     this_df = DF[DF['subject']==subj].copy()
 
                     x = np.array(this_df[mdv])
-                    y = np.array(this_df[pupil_dv])  
+                    y = np.array(this_df[pupil_dv])
                     r,pval = stats.pearsonr(x,y)
                     save_coeff.append(self.fisher_transform(r))
-                
+
                     if s==plot_subject:  # plot one random subject
                         fig = plt.figure(figsize=(2,2))
                         ax = fig.add_subplot(111)
@@ -1283,7 +1514,7 @@ class higherLevel(object):
                         m, b = np.polyfit(x, y, 1)
                         ax.plot(x, m*x+b, color='grey',alpha=1)
                         # set figure parameters
-                        ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
+                        ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2), np.round(pval,3)))
                         ax.set_ylabel(pupil_dv)
                         ax.set_xlabel(mdv)
                         # ax.legend()

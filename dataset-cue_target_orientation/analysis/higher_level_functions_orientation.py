@@ -1286,69 +1286,66 @@ class higherLevel(object):
         # save whole DF
         df_out.to_csv(fn_in) # overwrite subjects dataframe
         print('success: information_theory_estimates')
+    
 
-
-    def pupil_information_regression(self,):
-        # regress information variables on pupil data 
-        # demean all data
+    def pupil_information_correlation_matrix(self,):
+        # correlation information variables to evaluate multicollinearity
         
-        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2']
-        # ivs = ['model_target_i', 'model_target_H', 'KL_target-prediction']
-        # ivs = ['model_target_i', 'model_target_H', 'model_target_D']
-        # ivs = ['model_target_i', 'KL_target-prediction']
-        ivs = ['KL_target-prediction']
+        # dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2']
+        ivs = ['model_target_i', 'model_target_H', 'model_target_D']
+        labels = ['i' , 'H', 'KL']
+
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+
+        ############################
+        # drop outliers
+        DF = DF[DF['outlier_rt']==0]
+        ############################
         
+        corr_out = []
+
+        # loop subjects
+        for s, subj in enumerate(np.unique(DF['subject'])):
+            # get current subject's data only
+            this_df = DF[DF['subject']==subj].copy()
+                            
+            x = this_df[ivs] # select information variable columns
+            x_corr = x.corr() # correlation matrix
+            
+            
+            corr_out.append(x_corr) # beta KLdivergence (target-prediction)
         
-        for sp, pupil_dv in enumerate(dvs):
-
-            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-
-            ############################
-            # drop outliers
-            DF = DF[DF['outlier_rt']==0]
-            ############################
-            
-            df_out = pd.DataFrame()
-            save_betas_i = []
-            save_betas_H = []
-            save_betas_D = []
-            
-            # loop subjects
-            for s, subj in enumerate(np.unique(DF['subject'])):
-                # get current subject's data only
-                this_df = DF[DF['subject']==subj].copy()
-                
-                ################ MODEL: 'pupil ~ constant + surprise + entropy + KLdivergence(target-prediction)'
-                Y = np.array(this_df[pupil_dv]) # pupil
-                X = this_df[ivs]
-                
-                # normalize variables
-                # Y = stats.zscore(Y)
-                # X = stats.zscore(X)
-                
-                X = sm.add_constant(X)
-                
-                
-                
-                # ordinary least squares linear regression
-                model = sm.OLS(Y, X)
-                results = model.fit()
-                
-                # save_betas_i.append(results.params[0]) # beta surprise
-                # save_betas_H.append(results.params[1]) # beta entropy
-                save_betas_D.append(results.params[-1]) # beta KLdivergence (target-prediction)
-            
-            # df_out['betas_i'] = np.array(save_betas_i)
-            # df_out['betas_H'] = np.array(save_betas_H)
-            df_out['betas_D'] = np.array(save_betas_D)
-            
-            df_out.to_csv(os.path.join(self.jasp_folder, '{}_pupil_information_regress_normalized_betas_{}.csv'.format(self.exp, pupil_dv)))
-            
-        print('success: pupil_information_regression')
+        corr_subjects = np.array(corr_out)
+        corr_mean = np.mean(corr_subjects, axis=0)
+        corr_std = np.std(corr_subjects, axis=0)
+        
+        t, pvals = sp.stats.ttest_1samp(corr_subjects, 0, axis=0)
+        
+        ### PLOT ###
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(121)
+        cbar_ax = fig.add_subplot(122)
+        
+        # mask for significance
+        mask_pvals = pvals < 0.05
+        mask_pvals = ~mask_pvals # True means mask this cell
+        
+        # plot only lower triangle
+        mask = np.triu(np.ones_like(corr_mean))
+        mask = mask + mask_pvals # only show sigificant correlations in heatmap
+        
+        ax = sns.heatmap(corr_mean, vmin=-1, vmax=1, mask=mask, cmap='bwr', cbar_ax=cbar_ax, xticklabels=labels, yticklabels=labels, square=True, annot=True, ax=ax)
+        
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_pupil_information_correlation_matrix.pdf'.format(self.exp)))
+                        
+        print('success: pupil_information_correlation_matrix')
                 
 
-    def dataframe_evoked_regression(self):
-        """Compute evoked pupil responses.
+    def dataframe_evoked_correlation(self):
+        """Partial correlation of theoretic variables with other variables removed.
         
         Notes
         -----
@@ -1359,7 +1356,7 @@ class higherLevel(object):
         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
         
-        ivs = ['model_target_i', 'model_target_H', 'model_target_D', 'model_prediction_D', 'KL_target-prediction']
+        ivs = ['model_target_i', 'model_target_H', 'model_target_D']
 
         df_out = pd.DataFrame() # timepoints x subjects
         for t,time_locked in enumerate(self.time_locked):
@@ -1385,11 +1382,17 @@ class higherLevel(object):
                     
                     evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
                     
-                    save_timepoint_betas = []
+                    save_timepoint_r = []
                     # loop timepoints, regress
                     for col in evoked_cols:
-                        Y = np.array(SDATA[col]) # pupil
-                        X = SDATA[iv]
+                        
+                        # First remove other ivs from current iv with linear regression    
+                        remove_ivs = [i for i in ivs if not i == iv]
+                        
+                        # model: iv1 ~ constant + iv2 + iv3, take residuals into correlation with pupil
+                        Y = np.array(SDATA[iv]) # current iv
+
+                        X = SDATA[remove_ivs]
                         
                         Y = stats.zscore(Y)
                         X = stats.zscore(X)
@@ -1399,12 +1402,18 @@ class higherLevel(object):
                         # ordinary least squares linear regression
                         model = sm.OLS(Y, X)
                         results = model.fit()
-                        save_timepoint_betas.append(results.params[-1])
+                        
+                        x = results.resid # residuals of theoretic variable regression
+                        y = np.array(SDATA[col]) # pupil
+                        
+                        r, pval = sp.stats.pearsonr(x, y)
+                    
+                        save_timepoint_r.append(self.fisher_transform(r))
                     # add column for each subject with timepoints as rows
-                    df_out[subj] = np.array(save_timepoint_betas)
+                    df_out[subj] = np.array(save_timepoint_r)
                     
                 # save output file
-                df_out.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_regression_betas_{}.csv'.format(self.exp, time_locked, iv)))
+                df_out.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}.csv'.format(self.exp, time_locked, iv)))
         print('success: dataframe_evoked_regression')
         
         
@@ -1418,10 +1427,10 @@ class higherLevel(object):
         ylim_feed = [-2.5,2.5]
         tick_spacer = 2.5
         
-        ivs = ['model_target_i', 'model_target_H', 'model_target_D', 'model_prediction_D', 'KL_target-prediction']
+        ivs = ['model_target_i', 'model_target_H', 'model_target_D']
     
         # xticklabels = ['mean response']
-        colors = ['red', 'orange', 'green' , 'blue' , 'purple'] # black
+        colors = ['red', 'orange', 'blue' , 'purple'] # black
         alphas = [1]
         
         #######################
@@ -1442,7 +1451,7 @@ class higherLevel(object):
         
         for i,iv in enumerate(ivs):
             # Compute means, sems across group
-            COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_regression_betas_{}.csv'.format(self.exp, time_locked, iv)))
+            COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}.csv'.format(self.exp, time_locked, iv)))
             COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
 
             # plot time series
@@ -1466,63 +1475,128 @@ class higherLevel(object):
         # ax.set_ylim(ylim_feed)
         # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
-        ax.set_ylabel('Beta coefficient')
+        ax.set_ylabel('rz')
         ax.set_title(time_locked)
         ax.legend()
         
         # whole figure format
         sns.despine(offset=10, trim=True)
         plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_evoked_regression_betas.pdf'.format(self.exp)))
+        fig.savefig(os.path.join(self.figure_folder,'{}_evoked_correlation.pdf'.format(self.exp)))
         
+    
+    def information_evoked_get_phasics(self,):
+        """Computes phasic pupil (evoked average) in selected time window per trial and add phasics to behavioral data frame. 
         
-    def pupil_information_correlation(self,):
-        """Compute single-trial correlation between information theory variables and phasic t1 and t2.
+        Notes
+        -----
+        Overwrites original log file (this_log).
+        """
+        
+        ivs = ['model_target_i', 'model_target_H', 'model_target_D']
+        # xticklabels = ['mean response']
+        
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+        # sort by subjects then trial_counter in ascending order
+        DF.sort_values(by=['subject', 'trial_counter'], ascending=True, inplace=True)
+        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
+        
+        # loop theoretic variables
+        for iv in ivs:
+            
+            # loop through each type of event to lock events to...
+            for t,time_locked in enumerate(self.time_locked):
+                
+                df_out = pd.DataFrame()
+                
+                # load evoked pupil file (all subjects as columns and time points as rows)
+                df_pupil = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}.csv'.format(self.exp, time_locked, iv)))
+                df_pupil = df_pupil.loc[:, ~df_pupil.columns.str.contains('^Unnamed')] # remove all unnamed columns
+            
+                pupil_step_lim = self.pupil_step_lim[t] # kernel size is always the same for each event type
+                
+                for twi,pupil_time_of_interest in enumerate(self.pupil_time_of_interest[t]): # multiple time windows to average                
+                    
+                    save_phasics = []
+                    
+                    # loop subjects
+                    for s,subj in enumerate(self.subjects):
+                        
+                        P = np.array(df_pupil[subj]) # current subject
+                        
+                        # in seconds
+                        phase_start = -pupil_step_lim[0] + pupil_time_of_interest[0]
+                        phase_end = -pupil_step_lim[0] + pupil_time_of_interest[1]
+                        # in sample rate units
+                        phase_start = int(phase_start*self.sample_rate)
+                        phase_end = int(phase_end*self.sample_rate)
+                        # mean within phasic time window
+                        this_phasic = np.nanmean(P[phase_start:phase_end]) 
+                        
+                        save_phasics.append(this_phasic)
+                        
+                    # save phasics
+                    df_out['coeff_{}_t{}'.format(time_locked,twi+1)] = np.array(save_phasics)
+                
+            #######################
+            df_out.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}.csv'.format(self.exp, iv)))
+        print('success: information_evoked_get_phasics')
+        
+    
+    def plot_information_phasics(self, ):
+        """Plot the group level correlation coefficients across time windows
 
         Notes
         -----
-        Plots a random subject.
+        3 figures, GROUP LEVEL DATA
+        x-axis time window.
+        Figure output as PDF in figure folder.
         """
-        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']
-        model_dvs = ['model_prediction_D', 'model_target_D', 'KL_target-prediction']
-        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)
+        dvs = ['model_target_i', 'model_target_H', 'model_target_D']
+        ylabels = ['rz', 'rz', 'rz']
+        factor = 'mapping1'
+        xlabel = 'Time window'
+        xticklabels = ['Early','Late'] 
+        colors = ['red', 'orange', 'blue'] 
+        bar_width = 0.7
+        xind = np.arange(len(xticklabels))
+        ylim = [-0.3, 0.3]
+                
+        # single figure 3 subplots
+        fig = plt.figure(figsize=(4,2))
+        
+        for dvi,model_dv in enumerate(dvs):
+            
+            ax = fig.add_subplot(1, 3, dvi+1) # 1 subplot per bin windo
+            
+            DFIN = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}.csv'.format(self.exp, model_dv)))
+            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+            
+            # Group average per BIN WINDOW
+            GROUP = np.mean(DFIN)
+            SEM = np.true_divide(np.std(DFIN),np.sqrt(len(self.subjects)))
+            print(GROUP)
+                        
+            ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+                       
+            # plot bar graph
+            ax.bar(xind, GROUP, width=bar_width, yerr=SEM, capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
+                        
+            # individual points, repeated measures connected with lines
+            for s in np.arange(DFIN.shape[0]):
+                ax.plot(xind, DFIN.iloc[s,:], linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.2) # marker, line, black
 
-        for mdv in model_dvs:
-            for sp, pupil_dv in enumerate(dvs):
+            # set figure parameters
+            ax.set_ylabel(ylabels[dvi])
+            ax.set_xlabel(xlabel)
+            ax.set_ylim(ylim)
+            ax.set_xticks(xind)
+            ax.set_xticklabels(xticklabels)
 
-                DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-
-                ############################
-                # drop outliers
-                DF = DF[DF['outlier_rt']==0]
-                ############################
-
-                plot_subject = np.random.randint(0,len(self.subjects)) # plot random subject
-                save_coeff = []
-                for s, subj in enumerate(np.unique(DF['subject'])):
-                    this_df = DF[DF['subject']==subj].copy()
-
-                    x = np.array(this_df[mdv])
-                    y = np.array(this_df[pupil_dv])
-                    r,pval = stats.pearsonr(x,y)
-                    save_coeff.append(self.fisher_transform(r))
-
-                    if s==plot_subject:  # plot one random subject
-                        fig = plt.figure(figsize=(2,2))
-                        ax = fig.add_subplot(111)
-                        ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
-                        m, b = np.polyfit(x, y, 1)
-                        ax.plot(x, m*x+b, color='grey',alpha=1)
-                        # set figure parameters
-                        ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2), np.round(pval,3)))
-                        ax.set_ylabel(pupil_dv)
-                        ax.set_xlabel(mdv)
-                        # ax.legend()
-                        plt.tight_layout()
-                        fig.savefig(os.path.join(self.figure_folder,'{}_pupil_information_correlation_{}.pdf'.format(self.exp, pupil_dv)))
-                DFOUT[pupil_dv] = np.array(save_coeff)
-            DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_pupil_information_correlation_{}.csv'.format(self.exp, mdv)))
-        print('success: pupil_information_correlation')
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_correlation_phasic.pdf'.format(self.exp)))
+        print('success: plot_information_phasics')
         
         
         

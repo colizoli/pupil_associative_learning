@@ -143,6 +143,8 @@ if higher_level:
     # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
     
     # higherLevel.information_theory_estimates()
-    # higherLevel.pupil_information_regression()
-    # higherLevel.dataframe_evoked_regression()
-    higherLevel.plot_pupil_information_regression_evoked()
+    # higherLevel.pupil_information_correlation_matrix()
+    # higherLevel.dataframe_evoked_correlation()
+    # higherLevel.plot_pupil_information_regression_evoked()
+    # higherLevel.information_evoked_get_phasics()
+    higherLevel.plot_information_phasics()

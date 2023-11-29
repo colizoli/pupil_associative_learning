@@ -26,7 +26,7 @@ from IPython import embed as shell # for debugging
 # ----------------------- 
 pre_process     = False # pupil preprocessing is done on entire time series
 trial_process   = False # cut out events for each trial and calculate trial-wise baselines, baseline correct evoked responses
-higher_level    = False # all subjects' dataframe, pupil and behavior higher level analyses & figures
+higher_level    = True # all subjects' dataframe, pupil and behavior higher level analyses & figures
 
 # -----------------------
 # Paths

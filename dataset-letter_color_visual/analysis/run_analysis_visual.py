@@ -34,7 +34,7 @@ from IPython import embed as shell # for debugging
 training        = False  # process the logfiles and average the performance on the odd-ball training task
 pre_process     = False  # pupil preprocessing is done on entire time series during the 2AFC decision task
 trial_process   = False  # cut out events for each trial and calculate trial-wise baselines, baseline correct evoked responses (2AFC decision)
-higher_level    = False   # all subjects' dataframe, pupil and behavior higher level analyses & figures (2AFC decision)
+higher_level    = True   # all subjects' dataframe, pupil and behavior higher level analyses & figures (2AFC decision)
  
 # -----------------------
 # Paths
@@ -66,11 +66,12 @@ if training:
         experiment_name   = 'task-letter_color_visual_training',
         project_directory = data_dir
         )
-    oddballTraining.create_subjects_dataframe()       # drops missed trials, saves higher level data frame
-    oddballTraining.average_conditions()              # group level data frames for all main effects + interaction
-    oddballTraining.plot_behav()                      # plots behavior, group level, main effects + interaction
-    oddballTraining.calculate_actual_frequencies()    # calculates the actual frequencies of pairs
-
+    # oddballTraining.create_subjects_dataframe()       # drops missed trials, saves higher level data frame
+    # oddballTraining.average_conditions()              # group level data frames for all main effects + interaction
+    # oddballTraining.plot_behav()                      # plots behavior, group level, main effects + interaction
+    # oddballTraining.calculate_actual_frequencies()    # calculates the actual frequencies of pairs
+    oddballTraining.information_theory_estimates()
+    
 # -----------------------
 # Event-locked pupil parameters (shared)
 # -----------------------
@@ -149,18 +150,30 @@ if higher_level:
         pupil_time_of_interest  = [[[0.75,1.25], [2.5,3.0]]], # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
         freq_cond               = 'frequency'   # determines how to group the conditions based on actual frequencies
         )
-    higherLevel.higherlevel_get_phasics()       # computes phasic pupil for each subject (adds to log files)
-    higherLevel.create_subjects_dataframe(blocks = break_trials+[240])  # add baselines, concantenates all subjects, flags missed trials, saves higher level data frame
+    # higherLevel.higherlevel_get_phasics()       # computes phasic pupil for each subject (adds to log files)
+    # higherLevel.create_subjects_dataframe(blocks = break_trials+[240])  # add baselines, concantenates all subjects, flags missed trials, saves higher level data frame
     ''' Note: the functions after this are using: task-letter_color_visual_decision_subjects.csv
     '''
-    higherLevel.average_conditions()           # group level data frames for all main effects + interaction
-    higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
-    higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
-    higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
-    higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
-    higherLevel.confound_baseline_phasic()       # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
+    # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
+    # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
+    # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
+    # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
+    # higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
+    # higherLevel.confound_baseline_phasic()     # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
     
     ''' Evoked pupil response
     '''
-    higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    
+    # higherLevel.information_theory_estimates()
+    # higherLevel.pupil_information_correlation_matrix()
+    # higherLevel.dataframe_evoked_correlation()
+    # higherLevel.plot_pupil_information_regression_evoked()
+    higherLevel.information_evoked_get_phasics()
+    higherLevel.plot_information_phasics()
+    higherLevel.plot_information_phasics_accuracy_split()
+    
+    
+    
+    

@@ -1,12 +1,10 @@
-READ ME FILE 
-Data set #1: cue-target orientation 2AFC task
+# pupil_preprocessing
 
-This was a previously published data set. Please also cite the original article:
+General preprocessing scripts for pupillometry (EyeLink eye-tracker)
 
-Rutar, D., Colizoli, O., Selen, L., Spieß, L., Kwisthout, J., & Hunnius, S. (2023). Differentiating between Bayesian parameter learning and structure learning based on behavioural and pupil measures. PloS one, 18(2), e0270619.
+For EyeLink, need to have the edf2asc executable, install desktop application. <br>
+If not using EyeLink, can start from preprocessing_functions_control_exp.preprocess_pupil(), with self.pupil as time series.
 
-The public data can be downloaded here: https://doi.org/10.34973/t41p-hx94
-
-The participants file used in the current article can be found in dataset-1 > derivatives > participants.csv
-A copy of the processed data file for the current article can be found in dataset-1 > derivatives > save_processed_data > task-cue_target_orientation_subjects.csv
+For reading trials:
+Trials are marked by a 1 at the index of the onset of each event with respect to the entire pupil time series.
 

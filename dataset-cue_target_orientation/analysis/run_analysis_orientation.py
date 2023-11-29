@@ -148,3 +148,8 @@ if higher_level:
     # higherLevel.plot_pupil_information_regression_evoked()
     # higherLevel.information_evoked_get_phasics()
     higherLevel.plot_information_phasics()
+    higherLevel.plot_information_phasics_accuracy_split()
+    
+    
+    
+    

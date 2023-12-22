@@ -82,7 +82,7 @@ if pre_process:
             mpd                 = mpd,
             threshold           = threshold
             )
-        pupilPreprocess.housekeeping(experiment_name)   # rename files 
+        pupilPreprocess.housekeeping(experiment_name)   # rename files
         pupilPreprocess.read_trials()                   # change read_trials for different message strings
         pupilPreprocess.preprocess_pupil()              # blink interpolation, filtering, remove blinks/saccades, percent signal change, plots output
 
@@ -134,19 +134,19 @@ if higher_level:
     # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
     # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
     # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
-    # higherLevel.confound_rt_pupil()            # single-trial correlation between RT and pupil_dvs, plot random subjects
-    # higherLevel.confound_baseline_phasic()     # single-trial correlation between feedback_baseline and phasic t1 and t2, plot random subjects
     
     ''' Evoked pupil response
     '''
-    # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
     
-    # higherLevel.information_theory_estimates()
-    # higherLevel.pupil_information_correlation_matrix()
-    # higherLevel.dataframe_evoked_correlation()
-    # higherLevel.plot_pupil_information_regression_evoked()
-    # higherLevel.information_evoked_get_phasics()
+    ''' Ideal learner model
+    '''
+    higherLevel.information_theory_estimates()
+    higherLevel.pupil_information_correlation_matrix()
+    higherLevel.dataframe_evoked_correlation()
+    higherLevel.plot_pupil_information_regression_evoked()
+    higherLevel.information_evoked_get_phasics()
     higherLevel.plot_information_phasics()
     higherLevel.plot_information_phasics_accuracy_split()
     

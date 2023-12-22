@@ -438,8 +438,8 @@ class higherLevel(object):
 
                     #######################
                     B = B.loc[:, ~B.columns.str.contains('^Unnamed')] # remove all unnamed columns
-                    B.to_csv(this_log)
-                    print('subject {}, {} phasic pupil extracted {}'.format(subj,time_locked,pupil_time_of_interest))
+                    B.to_csv(this_log, float_format='%.16f')
+                    print('subject {}, {} phasic pupil extracted {}'.format(subj, time_locked, pupil_time_of_interest))
         print('success: higherlevel_get_phasics')
         
                 
@@ -726,98 +726,6 @@ class higherLevel(object):
            plt.tight_layout()
            fig.savefig(os.path.join(self.figure_folder,'{}_frequency_individual_differences_{}.pdf'.format(self.exp, pupil_dv)))
        print('success: individual_differences')
-
-
-    def confound_rt_pupil(self,):
-        """Compute single-trial correlation between RT and pupil_dvs, subject and group level
-       
-        Notes
-        -----
-        Plots a random subject.
-        """
-        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']
-        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
-        for sp, pupil_dv in enumerate(dvs):
-
-            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-            
-            ############################
-            # drop outliers
-            DF = DF[DF['outlier_rt']==0]
-            ############################
-
-            plot_subject = np.random.randint(0, len(self.subjects)) # plot random subject
-            save_coeff = []
-            for s, subj in enumerate(np.unique(DF['subject'])):
-                this_df = DF[DF['subject']==subj].copy()
-
-                x = np.array(this_df['reaction_time'])
-                y = np.array(this_df[pupil_dv])  
-                r,pval = stats.pearsonr(x,y)
-                save_coeff.append(self.fisher_transform(r))
-                
-                if s==plot_subject:  # plot one random subject
-                    fig = plt.figure(figsize=(2,2))
-                    ax = fig.add_subplot(111)
-                    ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
-                    m, b = np.polyfit(x, y, 1)
-                    ax.plot(x, m*x+b, color='grey',alpha=1)
-                    # set figure parameters
-                    ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
-                    ax.set_ylabel(pupil_dv)
-                    ax.set_xlabel('RT (s)')
-                    # ax.legend()
-                    plt.tight_layout()
-                    fig.savefig(os.path.join(self.figure_folder,'{}_confound_RT_{}.pdf'.format(self.exp, pupil_dv)))
-            DFOUT[pupil_dv] = np.array(save_coeff)
-        DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_RT.csv'.format(self.exp)))
-        print('success: confound_rt_pupil')
-
-
-    def confound_baseline_phasic(self,):
-        """Compute single-trial correlation between feedback_baseline and phasic t1 and t2.
-       
-        Notes
-        -----
-        Plots a random subject.
-        """
-        dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2']
-        DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)       
-        for sp, pupil_dv in enumerate(dvs):
-
-            DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-            
-            ############################
-            # drop outliers
-            DF = DF[DF['outlier_rt']==0]
-            ############################
-
-            plot_subject = np.random.randint(0,len(self.subjects)) # plot random subject
-            save_coeff = []
-            for s, subj in enumerate(np.unique(DF['subject'])):
-                this_df = DF[DF['subject']==subj].copy()
-
-                x = np.array(this_df['pupil_baseline_target_locked'])
-                y = np.array(this_df[pupil_dv])  
-                r,pval = stats.pearsonr(x,y)
-                save_coeff.append(self.fisher_transform(r))
-                
-                if s==plot_subject:  # plot one random subject
-                    fig = plt.figure(figsize=(2,2))
-                    ax = fig.add_subplot(111)
-                    ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
-                    m, b = np.polyfit(x, y, 1)
-                    ax.plot(x, m*x+b, color='grey',alpha=1)
-                    # set figure parameters
-                    ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
-                    ax.set_ylabel(pupil_dv)
-                    ax.set_xlabel('pupil_baseline_feed_locked')
-                    # ax.legend()
-                    plt.tight_layout()
-                    fig.savefig(os.path.join(self.figure_folder,'{}_confound_baseline_phasic_{}.pdf'.format(self.exp, pupil_dv)))
-            DFOUT[pupil_dv] = np.array(save_coeff)
-        DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_baseline_phasic.csv'.format(self.exp)))
-        print('success: confound_baseline_phasic')
         
     
     def dataframe_evoked_pupil_higher(self):
@@ -840,6 +748,7 @@ class higherLevel(object):
             # Loop through conditions                
             for c,cond in enumerate(csv_names):
                 # intialize dataframe per condition
+
                 COND = pd.DataFrame()
                 g_idx = deepcopy(factors)[c]       # need to add subject idx for groupby()
                 
@@ -868,7 +777,7 @@ class higherLevel(object):
                     # add to condition dataframe
                     COND = pd.concat([COND,df],join='outer',axis=0) # can also do: this_cond = this_cond.append()  
                 # save output file
-                COND.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,cond)))
+                COND.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,cond)), float_format='%.16f')
         print('success: dataframe_evoked_pupil_higher')
     
     
@@ -1244,37 +1153,40 @@ class higherLevel(object):
         for t,trial_counter in enumerate(df['trial_counter']):
             vector = data[:trial_counter] # all the targets that have been seen so far
             # print(vector)
-            if t < 1: # if it's the first trial, our expectations are based only on the prior (values)
-                p1 = np.ones(len(elements)) / len(elements)
+            
+            # if it's the first trial, our expectations are based only on the prior (values)
+            if t == 0: 
+                alpha1 = np.ones(len(elements)) # np.sum(alpha) == len(elements), flat prior
+                p1 = alpha1 / len(elements) # probablity, i.e., np.sum(p1) == 1
                 p = p1
     
-            # print(p)
-            # at every trial, we compute:
+            # at every trial, we compute surprise.
+            # Surprise is defined by the negative log of the probability of the current trial given the previous trials.
             I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
             i = I[vector[-1]]   # surprise of the current event (last element in vector)
     
             # Updated estimated probabilities
             p = []
-            for element in elements:
+            for k in elements:
                 # +1 because in the prior there is one element of the same type; +4 because in the prior there are 4 elements
                 # The influence of the prior should be sampled by a distribution or
                 # set to a certain value based on Kidd et al. (2012, 2014)
-                p.append((np.sum(vector == element) + p1[element]) / (len(vector) + len(elements)))                  
-    
+                p.append((np.sum(vector == k) + alpha1[k]) / (len(vector) + len(alpha1)))       
+                
             model_e.append(vector[-1])  # element in current trial = last element in the vector
-            model_P.append(p)           # probability of all elements
-            model_p.append(p[vector[-1]]) # probability of element in current trial
+            model_P.append(p)           # probability of all elements in NEXT trial
+            model_p.append(p[vector[-1]]) # probability of element in NEXT trial
             model_I.append(I)
             model_i.append(i)
     
             # once we have the updated probabilities, we can compute KL Divergence, Entropy and Cross-Entropy
             prevtrial = t-1
-            if prevtrial < 0:
-                D = np.sum(p * (np.log2(p / np.array(p1))));
+            if prevtrial < 0: # first trial
+                D = np.sum(p * (np.log2(np.array(p1) / p))) # KL divergence, before vs. after, same direction as Mars et al. 2008
             else:
-                D = np.sum(p * (np.log2(p / np.array(model_P[prevtrial])))) # KL divergence
-    
-            H = np.sum(p * np.log2(p)) # negative entropy
+                D = np.sum(p * (np.log2(np.array(model_P[prevtrial]) / p))) # KL divergence, before vs. after, same direction as Mars et al. 2008
+            
+            H = np.sum(p * np.log2(p)) # negative entropy (note that np.log2(1/p) is equivalent to multiplying the whole sum by -1)
     
             CH = H + D # Cross-entropy
     
@@ -1318,8 +1230,9 @@ class higherLevel(object):
             this_df = df_in[df_in['subject']==subj].copy()
             
             # the input to the model is the trial sequence = the order of cue_target/prediction_pair for each participant
-            [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D] = self.idt_model(this_df, pair, elements)
-                
+            [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D] = self.idt_model(this_df, 'cue_target_pair', elements)
+            
+            this_df['model_p'] = np.array(model_p)
             this_df['model_i'] = np.array(model_i)
             this_df['model_H'] = np.array(model_H)
             this_df['model_D'] = np.array(model_D)
@@ -1426,7 +1339,6 @@ class higherLevel(object):
         
         ivs = ['model_i', 'model_H', 'model_D']
         
-        pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
         df_out = pd.DataFrame() # timepoints x subjects
         for t,time_locked in enumerate(self.time_locked):
             
@@ -1455,52 +1367,52 @@ class higherLevel(object):
                         evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
                     
                         save_timepoint_r = []
+                    
+                        # First remove other ivs from current iv with linear regression    
+                        remove_ivs = [i for i in ivs if not i == iv]
+                    
+                        # model: iv1 ~ constant + iv2 + iv3, take residuals into correlation with pupil
+                        Y = np.array(SDATA[iv]) # current iv                                                
+                        X = SDATA[remove_ivs]
+                        
+                        # select trials by condition
+                        if cond == 'correct':
+                            mask = SDATA['correct']==1
+                            # mask trials by condition
+                            X = X[mask] # ivs to partial out
+                            Y = Y[mask] # current iv
+                        elif cond == 'error':
+                            mask = SDATA['correct']==0
+                            # mask trials by condition
+                            X = X[mask] # ivs to partial out
+                            Y = Y[mask] # current iv
+                        else:
+                            mask = None
+                        
                         # loop timepoints, regress
                         for col in evoked_cols:
-                        
-                            # First remove other ivs from current iv with linear regression    
-                            remove_ivs = [i for i in ivs if not i == iv]
-                        
-                            # model: iv1 ~ constant + iv2 + iv3, take residuals into correlation with pupil
-                            Y = np.array(SDATA[iv]) # current iv
-                                                    
-                            X = SDATA[remove_ivs]
                             
-                            if cond == 'correct':
-                                mask = SDATA['correct']==1
-                                X = X[mask] # ivs to partial out
-                                Y = Y[mask] # current iv
-                                y = np.array(SDATA[col]) # pupil data for subsequent correlation
-                                y = y[mask]
-                            elif cond == 'error':
-                                mask = SDATA['correct']==0
-                                X = X[mask]
-                                Y = Y[mask]
-                                y = np.array(SDATA[col]) # pupil data for subsequent correlation
-                                y = y[mask]
-                            else:
-                                y = np.array(SDATA[col]) # all trials
-                                
-                            Y = stats.zscore(Y)
-                            X = stats.zscore(X)
+                            # current time point in pupil data
+                            y = np.array(SDATA[col]) # pupil data for subsequent correlation
+                            y = y[mask]
                         
                             X = sm.add_constant(X)
 
-                            # ordinary least squares linear regression
+                            # partial correlation via ordinary least squares linear regression, get residuals
                             model = sm.OLS(Y, X)
                             results = model.fit()
-                        
-                            x = results.resid # residuals of theoretic variable regression
-                        
+                            x = np.array(results.resid).flatten() # residuals of theoretic variable regression
+                            y = y.flatten()
+                            
                             r, pval = sp.stats.pearsonr(x, y)
                     
                             save_timepoint_r.append(self.fisher_transform(r))
                         # add column for each subject with timepoints as rows
                         df_out[subj] = np.array(save_timepoint_r)
-                        df_out[subj] = df_out[subj].apply(lambda x: '%.16f' % x) # remove scientific notation from df
+                        # df_out[subj] = df_out[subj].apply(lambda x: '%.16f' % x) # remove scientific notation from df
                     
                     # save output file
-                    df_out.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, cond, iv)))
+                    df_out.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, cond, iv)), float_format='%.16f')
         print('success: dataframe_evoked_regression')
         
         
@@ -1513,7 +1425,7 @@ class higherLevel(object):
         Partial correlations are done for all trials as well as for correct and error trials separately.
         """
         ylim_feed = [-0.2, 0.2]
-        tick_spacer = 2.5
+        tick_spacer = 0.1
         
         ivs = ['model_i', 'model_H', 'model_D']
     
@@ -1561,7 +1473,7 @@ class higherLevel(object):
         ax.set_xticks(xticks)
         ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
-        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
         ax.set_ylabel('r')
         ax.set_title(time_locked)
@@ -1594,7 +1506,7 @@ class higherLevel(object):
         
             save_conds = []
             # plot time series
-            for i, cond in enumerate(['correct', 'error']):
+            for i, cond in enumerate(['error', 'correct']):
             
                 # Compute means, sems across group
                 COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, cond, iv)))
@@ -1604,8 +1516,8 @@ class higherLevel(object):
                 self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
                 save_conds.append(TS) # for stats
         
-            # self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=1, color='purple', ax=ax, threshold=0.05, nrand=5000, cluster_correct=False)
-            self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=2, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+            self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=1, color='purple', ax=ax, threshold=0.05, nrand=5000, cluster_correct=False)
+            self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
         
             # set figure parameters
             ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
@@ -1621,7 +1533,7 @@ class higherLevel(object):
             ax.set_xticks(xticks)
             ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
             ax.set_ylim(ylim_feed)
-            # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
             ax.set_xlabel('Time from feedback (s)')
             ax.set_ylabel('r')
             ax.set_title(iv)
@@ -1690,7 +1602,7 @@ class higherLevel(object):
                 
                 #######################
                 df_out['subject'] = self.subjects
-                df_out.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, cond, iv)))
+                df_out.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, cond, iv, float_format='%.16f')))
             
             # combine error and correct for 2-way interaction test in JASP
             df_error = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'error', iv)))
@@ -1702,7 +1614,7 @@ class higherLevel(object):
             df_anova = pd.concat([df_error, df_correct], axis=1)
             df_anova = df_anova.loc[:, ~df_anova.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
-            df_anova.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'accuracy_anova', iv)))            
+            df_anova.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'accuracy_anova', iv)), float_format='%.16f')            
             
         print('success: information_evoked_get_phasics')
         
@@ -1811,5 +1723,97 @@ class higherLevel(object):
             fig.savefig(os.path.join(self.figure_folder,'{}_correlation_phasic_accuracy_split_{}.pdf'.format(self.exp, model_dv)))
         print('success: plot_information_phasics_accuracy_split')        
         
-        
+
+# NOT USING
+
+    # def confound_rt_pupil(self,):
+    #     """Compute single-trial correlation between RT and pupil_dvs, subject and group level
+    #
+    #     Notes
+    #     -----
+    #     Plots a random subject.
+    #     """
+    #     dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2', 'pupil_baseline_target_locked']
+    #     DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)
+    #     for sp, pupil_dv in enumerate(dvs):
+    #
+    #         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+    #
+    #         ############################
+    #         # drop outliers
+    #         DF = DF[DF['outlier_rt']==0]
+    #         ############################
+    #
+    #         plot_subject = np.random.randint(0, len(self.subjects)) # plot random subject
+    #         save_coeff = []
+    #         for s, subj in enumerate(np.unique(DF['subject'])):
+    #             this_df = DF[DF['subject']==subj].copy()
+    #
+    #             x = np.array(this_df['reaction_time'])
+    #             y = np.array(this_df[pupil_dv])
+    #             r,pval = stats.pearsonr(x,y)
+    #             save_coeff.append(self.fisher_transform(r))
+    #
+    #             if s==plot_subject:  # plot one random subject
+    #                 fig = plt.figure(figsize=(2,2))
+    #                 ax = fig.add_subplot(111)
+    #                 ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
+    #                 m, b = np.polyfit(x, y, 1)
+    #                 ax.plot(x, m*x+b, color='grey',alpha=1)
+    #                 # set figure parameters
+    #                 ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
+    #                 ax.set_ylabel(pupil_dv)
+    #                 ax.set_xlabel('RT (s)')
+    #                 # ax.legend()
+    #                 plt.tight_layout()
+    #                 fig.savefig(os.path.join(self.figure_folder,'{}_confound_RT_{}.pdf'.format(self.exp, pupil_dv)))
+    #         DFOUT[pupil_dv] = np.array(save_coeff)
+    #     DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_RT.csv'.format(self.exp)))
+    #     print('success: confound_rt_pupil')
+    #
+    #
+    # def confound_baseline_phasic(self,):
+    #     """Compute single-trial correlation between feedback_baseline and phasic t1 and t2.
+    #
+    #     Notes
+    #     -----
+    #     Plots a random subject.
+    #     """
+    #     dvs = ['pupil_target_locked_t1', 'pupil_target_locked_t2']
+    #     DFOUT = pd.DataFrame() # subjects x pupil_dv (fischer z-transformed correlation coefficients)
+    #     for sp, pupil_dv in enumerate(dvs):
+    #
+    #         DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+    #
+    #         ############################
+    #         # drop outliers
+    #         DF = DF[DF['outlier_rt']==0]
+    #         ############################
+    #
+    #         plot_subject = np.random.randint(0,len(self.subjects)) # plot random subject
+    #         save_coeff = []
+    #         for s, subj in enumerate(np.unique(DF['subject'])):
+    #             this_df = DF[DF['subject']==subj].copy()
+    #
+    #             x = np.array(this_df['pupil_baseline_target_locked'])
+    #             y = np.array(this_df[pupil_dv])
+    #             r,pval = stats.pearsonr(x,y)
+    #             save_coeff.append(self.fisher_transform(r))
+    #
+    #             if s==plot_subject:  # plot one random subject
+    #                 fig = plt.figure(figsize=(2,2))
+    #                 ax = fig.add_subplot(111)
+    #                 ax.plot(x, y, 'o', markersize=3, color='grey') # marker, line, black
+    #                 m, b = np.polyfit(x, y, 1)
+    #                 ax.plot(x, m*x+b, color='grey',alpha=1)
+    #                 # set figure parameters
+    #                 ax.set_title('subject={}, r = {}, p = {}'.format(subj, np.round(r,2),np.round(pval,3)))
+    #                 ax.set_ylabel(pupil_dv)
+    #                 ax.set_xlabel('pupil_baseline_feed_locked')
+    #                 # ax.legend()
+    #                 plt.tight_layout()
+    #                 fig.savefig(os.path.join(self.figure_folder,'{}_confound_baseline_phasic_{}.pdf'.format(self.exp, pupil_dv)))
+    #         DFOUT[pupil_dv] = np.array(save_coeff)
+    #     DFOUT.to_csv(os.path.join(self.jasp_folder, '{}_confound_baseline_phasic.csv'.format(self.exp)))
+    #     print('success: confound_baseline_phasic')
     

@@ -24,6 +24,8 @@ from lmfit import minimize, Parameters
 from fir import FIRDeconvolution
 import mne
 import glm_functions_prediction as glm_functions
+from IPython import embed as shell # used for debugging
+
 
 """ Plotting Format"""
 matplotlib.rcParams['pdf.fonttype'] = 42
@@ -42,6 +44,8 @@ sns.set(style='ticks', font='Arial', font_scale=1, rc={
     'xtick.color':'Black',
     'ytick.color':'Black',} )
 sns.plotting_context()
+
+pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
 
 
 class pupilPreprocess(object):
@@ -143,7 +147,7 @@ class pupilPreprocess(object):
         """
         usecols = ['Time','Type','L Raw X [px]','R Dia X [px]'] # only get these columns out
         # in source/sub-xx/sub-xx_task-predictions_eye.txt
-        EDF = pd.read_csv(os.path.join(self.source_directory, '{}.txt'.format(self.alias)), skiprows=38,delimiter='\t', usecols=usecols)
+        EDF = pd.read_csv(os.path.join(self.project_directory, '{}.txt'.format(self.alias)), skiprows=38,delimiter='\t', usecols=usecols)
         
         # EXTRACT MESSAGES
         # get row number of all messages in file, before removing from samples, add 1 to get following sample row index
@@ -155,8 +159,9 @@ class pupilPreprocess(object):
         self.TS = pd.DataFrame(EDF[EDF['Type'] == 'SMP']['R Dia X [px]']).reset_index() # index here referes to original rows, very important to keep it together with the pupil data
         self.TS.columns=['index','pupil']   # rename columns        
         # columns =['index', 'pupil']
-        np.save(os.path.join(self.project_directory, '{}_pupil.npy'.format(self.alias)), np.array(self.TS))
+        np.save(os.path.join(self.project_directory, '{}.npy'.format(self.alias)), np.array(self.TS))
         print('{} messages processed'.format(self.subject))
+    
     
     def preprocess_pupil(self,):
         """Carries out pupil preprocessing routine.
@@ -173,9 +178,9 @@ class pupilPreprocess(object):
         cols2 = ['index', 'pupil', 'pupil_interp','pupil_bp','pupil_clean','pupil_psc', 'pupil_zscore']        
                 
         try:
-            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}_pupil.npy'.format(self.alias))), columns=cols1)
+            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols1)
         except:
-            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}_pupil.npy'.format(self.alias))), columns=cols2)
+            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols2)
                 
         self.pupil_raw = np.array(self.TS['pupil'])
         
@@ -194,7 +199,7 @@ class pupilPreprocess(object):
         self.TS['pupil_clean']   = self.pupil_clean
         self.TS['pupil_psc']     = self.pupil_psc
         self.TS['pupil_zscore']  = self.pupil_zscore
-        np.save(os.path.join(self.project_directory, '{}_pupil_preprocessed.npy'.format(self.alias)), np.array(self.TS))
+        np.save(os.path.join(self.project_directory, '{}.npy'.format(self.alias)), np.array(self.TS))
         
         self.plot_pupil()                   # plots the pupil in all stages
         
@@ -850,7 +855,7 @@ class trials(object):
 
     """
     
-    def __init__(self,subject, edf, project_directory, sample_rate, phases, time_locked, pupil_step_lim, baseline_window, pupil_time_of_interest):
+    def __init__(self,subject, edf, project_directory, sample_rate, phases, time_locked, pupil_step_lim, baseline_window):
         """Constructor method"""
         self.subject = subject
         self.alias = edf
@@ -864,70 +869,6 @@ class trials(object):
         self.time_locked = time_locked
         self.pupil_step_lim = pupil_step_lim # size of pupil trials in seconds with respect to first event, first element should max = 0!
         self.baseline_window = baseline_window # seconds before event of interest
-        self.pupil_time_of_interest = pupil_time_of_interest   # test on all data
-        
-        if not os.path.isdir(self.figure_folder):
-            os.mkdir(self.figure_folder)
-    
-    
-    def cluster_sig_bar_1samp(self, array, x, yloc, color, ax, threshold=0.05, nrand=5000, cluster_correct=True):
-        """Permutation-based cluster correction on time courses, plot the stats as a bar in yloc.
-        
-        Parameters
-        ----------
-        array : array_like
-            Data.
-        x : 1D array_like
-            X-axis.
-        yloc : int or float
-            The location of the significance bar with respect to the y-axis.
-        color : string
-            The color of the significance bar.
-        ax : a matplotlib.axes.Axes instance, optional (default = None).
-            The figure or subplot handle.
-        threshold : float, optional (default = 0.05)
-            Alpha level for significance testing.
-        nrand : float or int, optional (default = 5000)
-            Number of repetitions for permutation.
-        cluster_correct : bool, optional (default = True)
-            Implement cluster-based corrected for significance testing.
-        """
-        if yloc == 1:
-            yloc = 10
-        if yloc == 2:
-            yloc = 20
-        if yloc == 3:
-            yloc = 30
-        if yloc == 4:
-            yloc = 40
-        if yloc == 5:
-            yloc = 50
-        if cluster_correct:
-            whatever, clusters, pvals, bla = mne.stats.permutation_cluster_1samp_test(array, n_permutations=nrand, n_jobs=10)
-            for j, cl in enumerate(clusters):
-                if len(cl) == 0:
-                    pass
-                else:
-                    if pvals[j] < threshold:
-                        for c in cl:
-                            sig_bool_indices = np.arange(len(x))[c]
-                            xx = np.array(x[sig_bool_indices])
-                            try:
-                                xx[0] = xx[0] - (np.diff(x)[0] / 2.0)
-                                xx[1] = xx[1] + (np.diff(x)[0] / 2.0)
-                            except:
-                                xx = np.array([xx - (np.diff(x)[0] / 2.0), xx + (np.diff(x)[0] / 2.0),]).ravel()
-                            ax.plot(xx, np.ones(len(xx)) * ((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0], color, alpha=1, linewidth=2.5)
-        else:
-            p = np.zeros(array.shape[1])
-            for i in range(array.shape[1]):
-                p[i] = sp.stats.ttest_rel(array[:,i], np.zeros(array.shape[0]))[1]
-            sig_indices = np.array(p < 0.05, dtype=int)
-            sig_indices[0] = 0
-            sig_indices[-1] = 0
-            s_bar = zip(np.where(np.diff(sig_indices)==1)[0]+1, np.where(np.diff(sig_indices)==-1)[0])
-            for sig in s_bar:
-                ax.hlines(((ax.get_ylim()[1] - ax.get_ylim()[0]) / yloc)+ax.get_ylim()[0], x[int(sig[0])]-(np.diff(x)[0] / 2.0), x[int(sig[1])]+(np.diff(x)[0] / 2.0), color=color, alpha=1, linewidth=2.5)
                 
                 
     def event_related_subjects(self,pupil_dv):
@@ -948,7 +889,7 @@ class trials(object):
         # loop through each type of event to lock events to...
         for t,time_locked in enumerate(self.time_locked):
             pupil_step_lim = self.pupil_step_lim[t]
-            TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}_pupil_preprocessed.npy'.format(self.alias))), columns=cols)   
+            TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols)   
             TS = TS.loc[:,['index',pupil_dv]] # don't need all columns            
             # get indices of phases with respect to full time series (add 1 because always one cell before event)
             phases = pd.read_csv(os.path.join(self.project_directory, '{}_phases.csv'.format(self.alias)))
@@ -968,8 +909,10 @@ class trials(object):
                 this_pupil = np.array(this_pupil)
                 SAVE_TRIALS[trial,:len(this_pupil)] = this_pupil # sometimes not enough data at the end
             # save as CSV file
+            pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
             SAVE_TRIALS = pd.DataFrame(SAVE_TRIALS)
-            SAVE_TRIALS.to_csv(os.path.join(self.project_directory, '{}_{}_pupil_events.csv'.format(self.alias, time_locked)))
+            
+            SAVE_TRIALS.to_csv(os.path.join(self.project_directory, '{}_{}_evoked.csv'.format(self.alias, time_locked)), float_format='%.16f')
             print('subject {}, {} events extracted'.format(self.subject, time_locked))
         print('sucess: event_related_subjects')
     
@@ -984,10 +927,10 @@ class trials(object):
         # loop through each type of event to lock events to...
         for t,time_locked in enumerate(self.time_locked):
             pupil_step_lim = self.pupil_step_lim[t]
-            P = pd.read_csv(os.path.join(self.project_directory, '{}_{}_pupil_events.csv'.format(self.alias, time_locked)))
+            P = pd.read_csv(os.path.join(self.project_directory, '{}_{}_evoked.csv'.format(self.alias, time_locked)))
             P.drop(['Unnamed: 0'],axis=1,inplace=True)
             P = np.array(P)
-            baselines_file = os.path.join(self.project_directory, '{}_{}_pupil_baselines.csv'.format(self.alias, time_locked))  # save baseline pupils
+            baselines_file = os.path.join(self.project_directory, '{}_{}_baselines.csv'.format(self.alias, time_locked))  # save baseline pupils
             SAVE_TRIALS = []
             for trial in range(len(P)):
                 event_idx = int(abs(pupil_step_lim[0]*self.sample_rate))
@@ -1000,9 +943,11 @@ class trials(object):
                 P[trial] = P[trial]-this_base
             # save baseline corrected events and baseline means too!
             P = pd.DataFrame(P)
-            P.to_csv(os.path.join(self.project_directory, '{}_{}_pupil_events_basecorr.csv'.format(self.alias, time_locked)))
+            
+            P.to_csv(os.path.join(self.project_directory, '{}_{}_evoked_basecorr.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            
             B = pd.DataFrame()
             B['pupil_baseline_' + time_locked] = np.array(SAVE_TRIALS) #was pupil_b
-            B.to_csv(baselines_file)
+            B.to_csv(baselines_file, float_format='%.16f')
             print('subject {}, {} events baseline corrected'.format(self.subject, time_locked))
         print('sucess: event_related_baseline_correction')

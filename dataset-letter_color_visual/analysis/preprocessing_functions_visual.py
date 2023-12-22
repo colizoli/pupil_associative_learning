@@ -23,7 +23,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from lmfit import minimize, Parameters, Parameter, report_fit
 from fir import FIRDeconvolution
-import glm_functions # for nuisance regression
+import glm_functions_visual as glm_functions # for nuisance regression
 from IPython import embed as shell # for debugging
 
 
@@ -1090,7 +1090,7 @@ class trials(object):
                 SAVE_TRIALS[trial,:len(this_pupil)] = np.array(this_pupil).flatten() # sometimes not enough data at the end
             # save as CSV file
             SAVE_TRIALS = pd.DataFrame(SAVE_TRIALS)
-            SAVE_TRIALS.to_csv(os.path.join(self.project_directory,'{}_{}_evoked.csv'.format(self.alias,time_locked)))
+            SAVE_TRIALS.to_csv(os.path.join(self.project_directory,'{}_{}_evoked.csv'.format(self.alias,time_locked)), float_format='%.16f')
             print('subject {}, {} events extracted'.format(self.subject,time_locked))
         print('sucess: event_related_subjects')
     
@@ -1121,9 +1121,9 @@ class trials(object):
                 P[trial] = P[trial]-this_base
             # save baseline corrected events and baseline means too!
             P = pd.DataFrame(P)
-            P.to_csv(os.path.join(self.project_directory,'{}_{}_evoked_basecorr.csv'.format(self.alias,time_locked)))
+            P.to_csv(os.path.join(self.project_directory,'{}_{}_evoked_basecorr.csv'.format(self.alias,time_locked)), float_format='%.16f')
             B = pd.DataFrame()
             B['pupil_baseline_' + time_locked] = np.array(SAVE_TRIALS) #was pupil_b
-            B.to_csv(baselines_file)
+            B.to_csv(baselines_file, float_format='%.16f')
             print('subject {}, {} events baseline corrected'.format(self.subject,time_locked))
         print('sucess: event_related_baseline_correction')

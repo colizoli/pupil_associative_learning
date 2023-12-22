@@ -336,70 +336,44 @@ class higherLevel(object):
         model_e = [] # trial sequence
         model_P = [] # probabilities of all elements at each trial
         model_p = [] # probability of current element at current trial
-        model_I = [] # surprise of all elements at each trial
-        model_i = [] # surprise of current element at current trial
-        model_H = [] # entropy at current trial
-        model_CH = [] # cross-entropy at current trial
-        model_D = []  # KL-divergence at current trial
     
         # loop trials
         for t in np.arange(df.shape[0]):
             vector = data[:t+1] #  trial number starts at 0, all the targets that have been seen so far
 
-            # print(vector)
-            if t < 1: # if it's the first trial, our expectations are based only on the prior (values)
-                p1 = np.ones(len(elements)) / len(elements)
+            # if it's the first trial, our expectations are based only on the prior (values)
+            if t < 1: 
+                alpha1 = np.ones(len(elements)) # np.sum(alpha) == len(elements), flat prior
+                p1 = alpha1 / len(elements) # probablity, i.e., np.sum(p1) == 1
                 p = p1
-
-            # print(p)
-            # at every trial, we compute:
-            I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
-            i = I[vector[-1]]   # surprise of the current event (last element in vector)
-            H = np.sum(p*I)     # entropy  (dot product?)
-
+    
             # Updated estimated probabilities
             p = []
-            for element in elements:
-                # +1 because in the prior there is one element of the same type; +N because in the prior there are N elements
+            for k in elements:
+                # +1 because in the prior there is one element of the same type; +4 because in the prior there are 4 elements
                 # The influence of the prior should be sampled by a distribution or
                 # set to a certain value based on Kidd et al. (2012, 2014)
-                p.append((np.sum(vector == element) + 1) / (len(vector) + len(elements)))                  
-
+                p.append((np.sum(vector == k) + alpha1[k]) / (len(vector) + len(alpha1)))       
+                
             model_e.append(vector[-1])  # element in current trial = last element in the vector
-            model_P.append(p)           # probability of all elements
-            model_p.append(p[vector[-1]]) # probability of element in current trial
-            model_I.append(I)
-            model_i.append(i)
-
-            # once we have the updated probabilities, we can compute KL Divergence, Entropy and Cross-Entropy
-            prevtrial = t-1
-            if prevtrial < 0:
-                D = np.sum(p * (np.log2(p / np.array(p1))));
-            else:
-                D = np.sum(p * (np.log2(p / np.array(model_P[prevtrial])))) # KL divergence
-
-            H = np.sum(p * np.log2(p)) # entropy
-
-            CH = H + D # Cross-entropy
-
-            model_H.append(H)   # entropy
-            model_CH.append(CH) # cross-entropy
-            model_D.append(D)   # KL divergence
-        
-        return [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D]
+            model_P.append(p)           # probability of all elements in NEXT trial
+            model_p.append(p[vector[-1]]) # probability of element in NEXT trial
+    
+        return [model_P]
         
         
     def information_theory_estimates(self, ):
         # https://github.com/FrancescPoli/eye_processing/blob/master/ITDmodel.m
         
         fn_in = os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp))
-        fn_out = os.path.join(self.dataframe_folder,'{}_subjects_information_theory.csv'.format(self.exp))
+        # fn_out = os.path.join(self.dataframe_folder,'{}_subjects_information_theory.csv'.format(self.exp))
         
         # drop oddball trials
         df_in = pd.read_csv(fn_in)
         df_in = df_in[df_in['oddball']==0]
-        df_in.to_csv(fn_out)
-        fn_in = fn_out
+        
+        # df_in.to_csv(fn_out)
+        # fn_in = fn_out
         
         self.information_theory_code_stimuli(fn_in) # code stimuli based on predictions and based on targets
         
@@ -421,19 +395,16 @@ class higherLevel(object):
             this_df = df_in[df_in['subject']==this_subj].copy()
             
             # the input to the model is the trial sequence = the order of letter-color pair for each participant
-            [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D] = self.idt_model(this_df, 'letter_color_pair', elements)
+            [model_P] = self.idt_model(this_df, 'letter_color_pair', elements)
             
-            # add to subject dataframe
-            this_df['model_p'] = np.array(model_p)
-            this_df['model_i'] = np.array(model_i)
-            this_df['model_H'] = np.array(model_H)
-            this_df['model_D'] = np.array(model_D)
-            df_out = pd.concat([df_out, this_df])    # add current subject df to larger df
+            # add to priors dataframe
+            # this_df['model_P'] = np.array(model_p)
+            # df_out = pd.concat([df_out, this_df])    # add current subject df to larger df
             
             df_prob_out['{}'.format(this_subj)] = np.array(model_P[-1])
             print(subj)
         
-        df_prob_out.to_csv(os.path.join(self.dataframe_folder,'{}_subjects_priors.csv'.format(self.exp)))
+        df_prob_out.to_csv(os.path.join(self.dataframe_folder,'{}_subjects_priors.csv'.format(self.exp)), float_format='%.8f')
         # save whole DF
         df_out.to_csv(fn_in) # overwrite subjects dataframe
         print('success: information_theory_estimates')

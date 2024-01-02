@@ -1424,16 +1424,12 @@ class higherLevel(object):
                                 mask = SDATA['correct']==True
                                 X = X[mask] # ivs to partial out
                                 Y = Y[mask] # current iv
-                                y = np.array(SDATA[col]) # pupil data for subsequent correlation
                                 y = y[mask]
                             elif cond == 'error':
                                 mask = SDATA['correct']==False
                                 X = X[mask]
                                 Y = Y[mask]
-                                y = np.array(SDATA[col]) # pupil data for subsequent correlation
                                 y = y[mask]
-                            else:
-                                y = np.array(SDATA[col]) # all trials
                     
                             X = sm.add_constant(X)
 
@@ -1556,9 +1552,12 @@ class higherLevel(object):
                 TS = np.array(COND.T)
                 self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
                 save_conds.append(TS) # for stats
-        
-            # self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=1, color='purple', ax=ax, threshold=0.05, nrand=5000, cluster_correct=False)
-            self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+                # single condition against 0
+                self.cluster_sig_bar_1samp(array=TS, x=pd.Series(range(TS.shape[-1])), yloc=1+i, color=colorsts[i], ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+            
+            # test difference
+            self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=3, color='purple', ax=ax, threshold=0.05, nrand=5000, cluster_correct=False)
+            self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=4, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
             
             # set figure parameters
             ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0

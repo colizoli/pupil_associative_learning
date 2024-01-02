@@ -166,13 +166,13 @@ if higher_level:
     
     ''' Ideal learner model
     '''
-    higherLevel.information_theory_estimates()
-    higherLevel.pupil_information_correlation_matrix()
-    higherLevel.dataframe_evoked_correlation()
+    # higherLevel.information_theory_estimates()
+    # higherLevel.pupil_information_correlation_matrix()
+    # higherLevel.dataframe_evoked_correlation()
     higherLevel.plot_pupil_information_regression_evoked()
-    higherLevel.information_evoked_get_phasics()
-    higherLevel.plot_information_phasics()
-    higherLevel.plot_information_phasics_accuracy_split()
+    # higherLevel.information_evoked_get_phasics()
+    # higherLevel.plot_information_phasics()
+    # higherLevel.plot_information_phasics_accuracy_split()
     
     
     

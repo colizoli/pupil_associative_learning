@@ -46,7 +46,7 @@ else:
 # -----------------------
 # Participants
 # -----------------------
-ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants.csv'))
+ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants_orientation.csv'))
 subjects = ['sub-{}'.format(s) for s in ppns['subject']]
 group    = ppns['normal_order']
 
@@ -137,18 +137,18 @@ if higher_level:
     
     ''' Evoked pupil response
     '''
-    higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
     
     ''' Ideal learner model
     '''
-    higherLevel.information_theory_estimates()
-    higherLevel.pupil_information_correlation_matrix()
-    higherLevel.dataframe_evoked_correlation()
+    # higherLevel.information_theory_estimates()
+    # higherLevel.pupil_information_correlation_matrix()
+    # higherLevel.dataframe_evoked_correlation()
     higherLevel.plot_pupil_information_regression_evoked()
-    higherLevel.information_evoked_get_phasics()
-    higherLevel.plot_information_phasics()
-    higherLevel.plot_information_phasics_accuracy_split()
+    # higherLevel.information_evoked_get_phasics()
+    # higherLevel.plot_information_phasics()
+    # higherLevel.plot_information_phasics_accuracy_split()
     
     
     

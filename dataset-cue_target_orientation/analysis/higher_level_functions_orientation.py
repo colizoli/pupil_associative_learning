@@ -1515,7 +1515,10 @@ class higherLevel(object):
                 TS = np.array(COND.T)
                 self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
                 save_conds.append(TS) # for stats
-        
+                # single condition against 0
+                self.cluster_sig_bar_1samp(array=TS, x=pd.Series(range(TS.shape[-1])), yloc=1+i, color=colorsts[i], ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+            
+            # test difference
             self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=1, color='purple', ax=ax, threshold=0.05, nrand=5000, cluster_correct=False)
             self.cluster_sig_bar_1samp(array=np.subtract(save_conds[1], save_conds[0]), x=pd.Series(range(TS.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
         

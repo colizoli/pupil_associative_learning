@@ -54,7 +54,7 @@ group    = ppns['normal_order']
 # Event-locked pupil parameters (shared)
 # -----------------------
 time_locked             = ['target_locked'] # events to consider
-phases                  = ['target'] # message markers  (note: these have to match phases variable above)
+phases                  = ['target']
 baseline_window         = 0.5 # seconds before event of interest
 pupil_step_lim          = [[-baseline_window,3]] # size of pupil trial kernels in seconds with respect to first event, first element should max = 0!
 sample_rate             = 500 # Hz
@@ -145,10 +145,18 @@ if higher_level:
     # higherLevel.information_theory_estimates()
     # higherLevel.pupil_information_correlation_matrix()
     # higherLevel.dataframe_evoked_correlation()
-    higherLevel.plot_pupil_information_regression_evoked()
+    # higherLevel.plot_pupil_information_regression_evoked()
+    # higherLevel.plot_phasic_pupil_information_scatter()
+    # higherLevel.average_information_conditions()
+    # higherLevel.plot_information()
+    higherLevel.plot_information_frequency()         # plots the interaction between the frequency and accuracy of the model parameters
+
+    # not using
     # higherLevel.information_evoked_get_phasics()
     # higherLevel.plot_information_phasics()
     # higherLevel.plot_information_phasics_accuracy_split()
+    # higherLevel.plot_information_pe()         # plots the interaction between the frequency and accuracy of the model parameters
+    
     
     
     

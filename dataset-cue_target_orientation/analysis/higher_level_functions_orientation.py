@@ -1141,44 +1141,49 @@ class higherLevel(object):
     
         # initialize output variables for current subject
         model_e = [] # trial sequence
-        model_P = [] # probabilities of all elements at each trial
+        model_P = [] # probabilities of all elements at current trial
         model_p = [] # probability of current element at current trial
-        model_I = [] # surprise of all elements at each trial
+        model_I = [] # surprise of all elements at current trial
         model_i = [] # surprise of current element at current trial
-        model_H = [] # negative entropy at current trial
+        model_H = [] # entropy at current trial
         model_CH = [] # cross-entropy at current trial
         model_D = []  # KL-divergence at current trial
     
         # loop trials
         for t,trial_counter in enumerate(df['trial_counter']):
-            vector = data[:trial_counter] # all the targets that have been seen so far
-            # print(vector)
+            vector = data[:t+1] #  trial number starts at 0, all the targets that have been seen so far
             
-            # if it's the first trial, our expectations are based only on the prior (values)
-            if t == 0: 
+            model_e.append(vector[-1])  # element in current trial = last element in the vector
+            
+            # print(vector)
+            if t < 1: # if it's the first trial, our expectations are based only on the prior (values)
+                # FLAT PRIORS
                 alpha1 = np.ones(len(elements)) # np.sum(alpha) == len(elements), flat prior
                 p1 = alpha1 / len(elements) # probablity, i.e., np.sum(p1) == 1
                 p = p1
-    
-            # at every trial, we compute surprise.
-            # Surprise is defined by the negative log of the probability of the current trial given the previous trials.
-            I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
-            i = I[vector[-1]]   # surprise of the current event (last element in vector)
-    
-            # Updated estimated probabilities
+
+            # EVERYTHING AFTER HERE IS CALCULATED INCLUDING CURRENT EVENT
+            # Updated estimated probabilities (posterior)
             p = []
             for k in elements:
-                # +1 because in the prior there is one element of the same type; +4 because in the prior there are 4 elements
+                # +1 because in the prior there is one element of the same type; +len(alpha) because in the prior there are #alpha elements
                 # The influence of the prior should be sampled by a distribution or
                 # set to a certain value based on Kidd et al. (2012, 2014)
                 p.append((np.sum(vector == k) + alpha1[k]) / (len(vector) + len(alpha1)))       
-                
-            model_e.append(vector[-1])  # element in current trial = last element in the vector
-            model_P.append(p)           # probability of all elements in NEXT trial
-            model_p.append(p[vector[-1]]) # probability of element in NEXT trial
+            
+            # at every trial, we compute surprise based on the probability
+            model_P.append(p)             # probability (all elements) 
+            model_p.append(p[vector[-1]]) # probability of current element
+            
+            # Surprise is defined by the negative log of the probability of the current trial given the previous trials.
+            I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
+            i = I[vector[-1]]   # surprise of the current event (last element in vector)
             model_I.append(I)
             model_i.append(i)
-    
+            
+            H = -np.sum(p * np.log2(p)) # entropy (note that np.log2(1/p) is equivalent to multiplying the whole sum by -1)
+            model_H.append(H)   # entropy
+            
             # once we have the updated probabilities, we can compute KL Divergence, Entropy and Cross-Entropy
             prevtrial = t-1
             if prevtrial < 0: # first trial
@@ -1186,11 +1191,8 @@ class higherLevel(object):
             else:
                 D = np.sum(p * (np.log2(p / np.array(model_P[prevtrial])))) # KL divergence, after vs. before, same direction as Poli et al. 2020
             
-            H = -np.sum(p * np.log2(p)) # negative entropy (note that np.log2(1/p) is equivalent to multiplying the whole sum by -1)
-    
             CH = H + D # Cross-entropy
     
-            model_H.append(H)   # negative entropy
             model_CH.append(CH) # cross-entropy
             model_D.append(D)   # KL divergence
         
@@ -1207,7 +1209,7 @@ class higherLevel(object):
         
         Model estimates that are saved in subject's dataframe:
         model_i = surprise of current element at current trial
-        model_H = negative entropy at current trial
+        model_H = entropy at current trial
         model_D = KL-divergence at current trial
         """
         
@@ -1250,7 +1252,7 @@ class higherLevel(object):
         -----
         Model estimates that are correlated per subject the tested at group level:
         model_i = surprise of current element at current trial
-        model_H = negative entropy at current trial
+        model_H = entropy at current trial
         model_D = KL-divergence at current trial
         
         See figure folder for plot and output of t-test.
@@ -1631,7 +1633,7 @@ class higherLevel(object):
         Figure output as PDF in figure folder.
         """
         dvs = ['model_D', 'model_i','model_H']
-        ylabels = ['KL divergence', 'Surprise', 'Negative entropy', ]
+        ylabels = ['KL divergence', 'Surprise', 'Entropy', ]
         xlabel = 'Trials'
         colors = [ 'purple', 'teal', 'orange',]    
         
@@ -1675,7 +1677,7 @@ class higherLevel(object):
         Figure output as PDF in figure folder.
         """
         dvs = ['model_D', 'model_i','model_H']
-        ylabels = ['KL divergence', 'Surprise', 'Negative entropy', ]
+        ylabels = ['KL divergence', 'Surprise', 'Entropy', ]
         factor = 'mapping1'
         xlabel = 'Cue-target frequency'
         xticklabels = ['20%','80%'] 

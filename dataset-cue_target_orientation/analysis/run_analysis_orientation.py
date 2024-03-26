@@ -142,13 +142,13 @@ if higher_level:
     
     ''' Ideal learner model
     '''
-    # higherLevel.information_theory_estimates()
-    # higherLevel.pupil_information_correlation_matrix()
-    # higherLevel.dataframe_evoked_correlation()
-    # higherLevel.plot_pupil_information_regression_evoked()
-    # higherLevel.plot_phasic_pupil_information_scatter()
-    # higherLevel.average_information_conditions()
-    # higherLevel.plot_information()
+    higherLevel.information_theory_estimates()
+    higherLevel.pupil_information_correlation_matrix()
+    higherLevel.dataframe_evoked_correlation()
+    higherLevel.plot_pupil_information_regression_evoked()
+    higherLevel.plot_phasic_pupil_information_scatter()
+    higherLevel.average_information_conditions()
+    higherLevel.plot_information()
     higherLevel.plot_information_frequency()         # plots the interaction between the frequency and accuracy of the model parameters
 
     # not using

@@ -66,11 +66,13 @@ if training:
         experiment_name   = 'task-letter_color_visual_training',
         project_directory = data_dir
         )
-    oddballTraining.create_subjects_dataframe()       # drops missed trials, saves higher level data frame
-    oddballTraining.average_conditions()              # group level data frames for all main effects + interaction
-    oddballTraining.plot_behav()                      # plots behavior, group level, main effects + interaction
-    oddballTraining.calculate_actual_frequencies()    # calculates the actual frequencies of pairs
-    oddballTraining.information_theory_estimates()
+    # oddballTraining.create_subjects_dataframe()       # drops missed trials, saves higher level data frame
+    # oddballTraining.average_conditions()              # group level data frames for all main effects + interaction
+    # oddballTraining.plot_behav()                      # plots behavior, group level, main effects + interaction
+    # oddballTraining.calculate_actual_frequencies()    # calculates the actual frequencies of pairs
+    # oddballTraining.information_theory_estimates()
+    oddballTraining.plot_information_frequency()
+    
     
 # -----------------------
 # Event-locked pupil parameters (shared)
@@ -169,11 +171,17 @@ if higher_level:
     # higherLevel.information_theory_estimates()
     # higherLevel.pupil_information_correlation_matrix()
     # higherLevel.dataframe_evoked_correlation()
-    higherLevel.plot_pupil_information_regression_evoked()
+    # higherLevel.plot_pupil_information_regression_evoked()
+    # higherLevel.average_information_conditions()
+    # higherLevel.plot_information()
+    # higherLevel.plot_information_frequency()    
+    
+    # not using
+    # higherLevel.partial_correlation_information()
+    # higherLevel.plot_information_pe()         # plots the interaction between the frequency and accuracy
     # higherLevel.information_evoked_get_phasics()
     # higherLevel.plot_information_phasics()
     # higherLevel.plot_information_phasics_accuracy_split()
-    
     
     
     

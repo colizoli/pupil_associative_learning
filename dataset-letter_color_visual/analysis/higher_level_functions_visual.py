@@ -352,7 +352,7 @@ class higherLevel(object):
         """
         for s,subj in enumerate(self.subjects):
             this_log = os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)) # derivatives folder
-            B = pd.read_csv(this_log) # behavioral file
+            B = pd.read_csv(this_log, float_precision='%.16f') # behavioral file
             ### DROP EXISTING PHASICS COLUMNS TO PREVENT OLD DATA
             try: 
                 B = B.loc[:, ~B.columns.str.contains('^Unnamed')] # remove all unnamed columns
@@ -368,7 +368,7 @@ class higherLevel(object):
                 for twi,pupil_time_of_interest in enumerate(self.pupil_time_of_interest[t]): # multiple time windows to average
                 
                     # load evoked pupil file (all trials)
-                    P = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked))) 
+                    P = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f') 
                     P = P.loc[:, ~P.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     P = np.array(P)
 
@@ -407,11 +407,11 @@ class higherLevel(object):
         # loop through subjects, get behavioral log files
         for s,subj in enumerate(self.subjects):
             
-            this_data = pd.read_csv(os.path.join(self.project_directory, subj, 'beh', '{}_{}_beh.csv'.format(subj,self.exp)))
+            this_data = pd.read_csv(os.path.join(self.project_directory, subj, 'beh', '{}_{}_beh.csv'.format(subj,self.exp)), float_precision='%.16f')
             this_data = this_data.loc[:, ~this_data.columns.str.contains('^Unnamed')] # remove all unnamed columns
             
             # open baseline pupil to add to dataframes as well
-            this_baseline = pd.read_csv(os.path.join(self.project_directory, subj, 'beh', '{}_{}_recording-eyetracking_physio_{}_baselines.csv'.format(subj, self.exp, 'feed_locked')))
+            this_baseline = pd.read_csv(os.path.join(self.project_directory, subj, 'beh', '{}_{}_recording-eyetracking_physio_{}_baselines.csv'.format(subj, self.exp, 'feed_locked')), float_precision='%.16f')
             this_baseline = this_baseline.loc[:, ~this_baseline.columns.str.contains('^Unnamed')] # remove all unnamed columns
             this_data['pupil_baseline_feed_locked'] = np.array(this_baseline)
             
@@ -427,7 +427,7 @@ class higherLevel(object):
         # count missing
         M = DF[DF['button']!='missing'] 
         missing = M.groupby(['subject','button'])['button'].count()
-        missing.to_csv(os.path.join(self.dataframe_folder,'{}_behavior_missing.csv'.format(self.exp)))
+        missing.to_csv(os.path.join(self.dataframe_folder,'{}_behavior_missing.csv'.format(self.exp)), float_format='%.16f')
         
         ### print how many outliers
         print('Missing = {}%'.format(np.true_divide(np.sum(DF['missing']),DF.shape[0])*100))
@@ -435,7 +435,7 @@ class higherLevel(object):
 
         #####################
         # merges the actual_frequencies and bins calculated from the oddball task logfiles into subjects' dataframe
-        FREQ = pd.read_csv(os.path.join(self.dataframe_folder,'{}_actual_frequencies.csv'.format('task-letter_color_visual_training')))
+        FREQ = pd.read_csv(os.path.join(self.dataframe_folder,'{}_actual_frequencies.csv'.format('task-letter_color_visual_training')), float_precision='%.16f')
         FREQ = FREQ.drop(['frequency'],axis=1) # otherwise get double
         FREQ = FREQ.loc[:, ~FREQ.columns.str.contains('^Unnamed')] # drop all unnamed columns
         # inner merge on subject, letter, and color (r)
@@ -443,13 +443,13 @@ class higherLevel(object):
         
         # actual frequencies average:
         AF = M.groupby(['frequency','match'])['actual_frequency'].mean()
-        AF.to_csv(os.path.join(self.dataframe_folder,'{}_actual_frequencies_mean.csv'.format(self.exp)))
+        AF.to_csv(os.path.join(self.dataframe_folder,'{}_actual_frequencies_mean.csv'.format(self.exp)), float_format='%.16f')
         
         print('actual frequencies per matching condition')
         print(AF) 
         #####################
         # save whole dataframe with all subjects
-        DF.to_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+        DF.to_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_format='%.16f')
         #####################
         print('success: higherlevel_dataframe')
         
@@ -462,7 +462,7 @@ class higherLevel(object):
         Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
         self.freq_cond argument determines how the trials were split
         """     
-        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
         DF.sort_values(by=['subject','trial_num'],inplace=True)
         DF.reset_index()
@@ -481,7 +481,7 @@ class higherLevel(object):
         DFANOVA =  DFOUT.unstack(['frequency','correct']) 
         print(DFANOVA.columns)
         DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-        DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-frequency-timewindow_rmanova.csv'.format(self.exp))) # for stats
+        DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-frequency-timewindow_rmanova.csv'.format(self.exp)), float_format='%.16f') # for stats
         
         #interaction accuracy and frequency
         for pupil_dv in ['RT', 'pupil_feed_locked_t1', 'pupil_feed_locked_t2', 'pupil_baseline_feed_locked']: #interaction accuracy and frequency
@@ -491,37 +491,37 @@ class higherLevel(object):
             '''
             # MEANS subject x bin x tone x congruent
             DFOUT = DF.groupby(['subject','correct',self.freq_cond])[pupil_dv].mean()
-            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-frequency_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-frequency_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # FOR PLOTTING
 
             # save for RMANOVA format
             DFANOVA =  DFOUT.unstack([self.freq_cond,'correct',]) 
             print(DFANOVA.columns)
             DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-frequency_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-frequency_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
             '''
             ######## CORRECT ########
             '''
             # MEANS subject x bin x tone x congruent
             DFOUT = DF.groupby(['subject','correct'])[pupil_dv].mean()
-            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct_{}.csv'.format(self.exp,pupil_dv))) # FOR PLOTTING
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # FOR PLOTTING
 
             # save for RMANOVA format
             DFANOVA =  DFOUT.unstack(['correct',]) 
             print(DFANOVA.columns)
             DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
         
         '''
         ######## FREQUENCY ########
         '''
         for pupil_dv in ['correct', 'RT', 'pupil_feed_locked_t1', 'pupil_feed_locked_t2', 'pupil_baseline_feed_locked']: # mean accuracy
             DFOUT = DF.groupby(['subject',self.freq_cond])[pupil_dv].mean()
-            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_frequency_{}.csv'.format(self.exp,pupil_dv))) # For descriptives
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_frequency_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # For descriptives
             # save for RMANOVA format
             DFANOVA =  DFOUT.unstack([self.freq_cond]) 
             print(DFANOVA.columns)
             DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp,pupil_dv))) # for stats
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
         print('success: average_conditions')
 
 
@@ -558,7 +558,7 @@ class higherLevel(object):
             fig = plt.figure(figsize=(2, 2))
             ax = fig.add_subplot(111)
             
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder, '{}_correct-frequency_{}.csv'.format(self.exp, pupil_dv)))
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder, '{}_correct-frequency_{}.csv'.format(self.exp, pupil_dv)), float_precision='%.16f')
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
             # Group average per BIN WINDOW
@@ -615,7 +615,7 @@ class higherLevel(object):
             fig = plt.figure(figsize=(2,2))
             ax = fig.add_subplot(111) # 1 subplot per bin window
 
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,'frequency',pupil_dv)))
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,'frequency',pupil_dv)), float_precision='%.16f')
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
             # Group average per BIN WINDOW
@@ -668,8 +668,8 @@ class higherLevel(object):
            fig = plt.figure(figsize=(2,2))
            ax = fig.add_subplot(111) # 1 subplot per bin window
            
-           B = pd.read_csv(os.path.join(self.jasp_folder,'{}_frequency_correct_rmanova.csv'.format(self.exp)))
-           P = pd.read_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp, pupil_dv)))
+           B = pd.read_csv(os.path.join(self.jasp_folder,'{}_frequency_correct_rmanova.csv'.format(self.exp)), float_precision='%.16f')
+           P = pd.read_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp, pupil_dv)), float_precision='%.16f')
 
            # frequency effect
            P['main_effect_freq'] = (P['80']-P['20'])
@@ -711,7 +711,7 @@ class higherLevel(object):
         Output in dataframe folder.
         """
         
-        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
         csv_names = deepcopy(['subject','correct','frequency','correct*frequency'])
         factors = [['subject'],['correct'],[self.freq_cond],['correct',self.freq_cond]]
@@ -729,7 +729,7 @@ class higherLevel(object):
                 for s,subj in enumerate(self.subjects):
                     subj_num = re.findall(r'\d+', subj)[0]
                     SBEHAV = DF[DF['subject']==int(subj_num)].reset_index() # not 'sub-' in DF
-                    SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked))))
+                    SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f'))
                     SPUPIL = SPUPIL.loc[:, ~SPUPIL.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     
                     # merge behavioral and evoked dataframes so we can group by conditions
@@ -777,7 +777,7 @@ class higherLevel(object):
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
-        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,factor)))
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,factor)), float_precision='%.16f')
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
     
         xticklabels = ['mean response']
@@ -844,7 +844,7 @@ class higherLevel(object):
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
-        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)))
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     
         xticklabels = ['Error','Correct']
@@ -907,7 +907,7 @@ class higherLevel(object):
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
-        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)))
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     
         xticklabels = ['20%','40%','80%']
@@ -979,7 +979,7 @@ class higherLevel(object):
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
-        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)))
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
         
         labels_frequences = np.unique(COND[self.freq_cond])
@@ -1067,7 +1067,7 @@ class higherLevel(object):
         
         New column name is "letter_color_pair"
         """
-        df_in = pd.read_csv(fn_in)
+        df_in = pd.read_csv(fn_in, float_precision='%.16f')
         
         # make new column to give each letter-color combination a unique identifier (1 - 36)        
         mapping = [
@@ -1118,7 +1118,7 @@ class higherLevel(object):
         elements = np.arange(36) # also elements is the same as priors (start with 0 so they can be indexed by element)
         df_in['letter_color_pair'] = np.select(mapping, elements)
         
-        df_in.to_csv(fn_in) # save with new columns
+        df_in.to_csv(fn_in, float_format='%.16f') # save with new columns
         print('success: information_theory_code_stimuli')   
     
 
@@ -1157,7 +1157,7 @@ class higherLevel(object):
         model_p = probability of current element at current trial
         model_I = surprise of all elements at each trial (i.e., complexity)
         model_i = surprise of current element at current trial
-        model_H = negative entropy at current trial
+        model_H = entropy at current trial
         model_CH = cross-entropy at current trial
         model_D = KL-divergence at current trial
         """
@@ -1166,10 +1166,10 @@ class higherLevel(object):
     
         # initialize output variables for current subject
         model_e = [] # trial sequence
-        model_P = [] # probabilities of all elements at each trial
-        model_p = [] # probability of current element at current trial
-        model_I = [] # surprise of all elements at each trial
-        model_i = [] # surprise of current element at current trial
+        model_P = [] # probabilities of all elements
+        model_p = [] # probability of current element 
+        model_I = [] # surprise of all elements 
+        model_i = [] # surprise of current element 
         model_H = [] # entropy at current trial
         model_CH = [] # cross-entropy at current trial
         model_D = []  # KL-divergence at current trial
@@ -1177,44 +1177,51 @@ class higherLevel(object):
         # loop trials
         for t in np.arange(df.shape[0]):
             vector = data[:t+1] #  trial number starts at 0, all the targets that have been seen so far
-
+            
+            model_e.append(vector[-1])  # element in current trial = last element in the vector
+            
             # print(vector)
             if t < 1: # if it's the first trial, our expectations are based only on the prior (values)
+                # PRIORS BASED ON ODDBALL TASK
                 alpha1 = priors*len(elements) # np.sum(alpha) == len(elements), priors from odd-ball task
                 p1 = priors # priors based on odd-ball task, np.sum(priors) should equal 1
                 p = p1
                 
-            # at every trial, we compute surprise.
+                # # FLAT PRIORS
+                # alpha1 = np.ones(len(elements)) # np.sum(alpha) == len(elements), flat prior
+                # p1 = alpha1 / len(elements) # probablity, i.e., np.sum(p1) == 1
+                # p = p1
+            
+            # at every trial, we compute surprise based on the probability
+            model_P.append(p)           # probability (all elements)
+            model_p.append(p[vector[-1]]) # probability of current element
             # Surprise is defined by the negative log of the probability of the current trial given the previous trials.
             I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
             i = I[vector[-1]]   # surprise of the current event (last element in vector)
-    
-            # Updated estimated probabilities
+            model_I.append(I)
+            model_i.append(i)
+            
+            # EVERYTHING AFTER HERE IS CALCULATED INCLUDING CURRENT EVENT
+            # Updated estimated probabilities (posterior)
             p = []
             for k in elements:
-                # +1 because in the prior there is one element of the same type; +4 because in the prior there are 4 elements
+                # +1 because in the prior there is one element of the same type; +len(alpha) because in the prior there are #alpha elements
                 # The influence of the prior should be sampled by a distribution or
                 # set to a certain value based on Kidd et al. (2012, 2014)
                 p.append((np.sum(vector == k) + alpha1[k]) / (len(vector) + len(alpha1)))       
-                
-            model_e.append(vector[-1])  # element in current trial = last element in the vector
-            model_P.append(p)           # probability of all elements in NEXT trial
-            model_p.append(p[vector[-1]]) # probability of element in NEXT trial
-            model_I.append(I)
-            model_i.append(i)
-    
+            
+            H = -np.sum(p * np.log2(p)) # entropy (note that np.log2(1/p) is equivalent to multiplying the whole sum by -1)
+            model_H.append(H)   # entropy
+            
             # once we have the updated probabilities, we can compute KL Divergence, Entropy and Cross-Entropy
             prevtrial = t-1
             if prevtrial < 0: # first trial
-                D = np.sum(p * (np.log2(np.array(p1) / p))) # KL divergence, before vs. after, same direction as Mars et al. 2008
+                D = np.sum(p * (np.log2(p / np.array(p1)))) # KL divergence, after vs. before, same direction as Poli et al. 2020
             else:
-                D = np.sum(p * (np.log2(np.array(model_P[prevtrial]) / p))) # KL divergence, before vs. after, same direction as Mars et al. 2008
+                D = np.sum(p * (np.log2(p / np.array(model_P[prevtrial])))) # KL divergence, after vs. before, same direction as Poli et al. 2020
             
-            H = np.sum(p * np.log2(p)) # negative entropy (note that np.log2(1/p) is equivalent to multiplying the whole sum by -1)
-    
             CH = H + D # Cross-entropy
     
-            model_H.append(H)   # negative entropy
             model_CH.append(CH) # cross-entropy
             model_D.append(D)   # KL divergence
         
@@ -1231,16 +1238,16 @@ class higherLevel(object):
         
         Model estimates that are saved in subject's dataframe:
         model_i = surprise of current element at current trial
-        model_H = negative entropy at current trial
+        model_H = entropy at current trial
         model_D = KL-divergence at current trial
         """
         
         fn_in = os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp))
-        priors = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects_priors.csv'.format('task-letter_color_visual_training')))
+        priors = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects_priors.csv'.format('task-letter_color_visual_training')), float_precision='%.16f')
         
         self.information_theory_code_stimuli(fn_in) # code stimuli based on predictions and based on targets
         
-        df_in = pd.read_csv(fn_in)
+        df_in = pd.read_csv(fn_in, float_precision='%.16f')
         df_in = df_in.loc[:, ~df_in.columns.str.contains('^Unnamed')]
         # sort by subjects then trial_counter in ascending order
         df_in.sort_values(by=['subject', 'trial_num'], ascending=True, inplace=True)
@@ -1272,10 +1279,10 @@ class higherLevel(object):
             print(subj)
         
         # save whole DF
-        df_out.to_csv(fn_in) # overwrite subjects dataframe
+        df_out.to_csv(fn_in, float_format='%.16f') # overwrite subjects dataframe
         print('success: information_theory_estimates')
         
-        
+
     def pupil_information_correlation_matrix(self,):
         """Correlate information variables to evaluate multicollinearity.
         
@@ -1283,16 +1290,16 @@ class higherLevel(object):
         -----
         Model estimates that are correlated per subject the tested at group level:
         model_i = surprise of current element at current trial
-        model_H = negative entropy at current trial
+        model_H = entropy at current trial
         model_D = KL-divergence at current trial
         
         See figure folder for plot and output of t-test.
         """
         
-        ivs = ['model_i', 'model_H', 'model_D']
-        labels = ['i' , 'H', 'KL']
+        ivs = ['model_i', 'model_H', 'model_D',]
+        labels = ['i' , 'H', 'KL',]
 
-        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
 
         #### DROP OMISSIONS HERE ####
         DF = DF[DF['drop_trial'] == 0] # drop outliers based on RT
@@ -1336,7 +1343,7 @@ class higherLevel(object):
         f.close
         
         ### PLOT ###
-        fig = plt.figure(figsize=(4,2))
+        fig = plt.figure(figsize=(8,8))
         ax = fig.add_subplot(121)
         cbar_ax = fig.add_subplot(122)
         
@@ -1348,7 +1355,8 @@ class higherLevel(object):
         mask = np.triu(np.ones_like(corr_mean))
         mask = mask + mask_pvals # only show sigificant correlations in heatmap
         
-        ax = sns.heatmap(corr_mean, vmin=-1, vmax=1, mask=mask, cmap='bwr', cbar_ax=cbar_ax, xticklabels=labels, yticklabels=labels, square=True, annot=True, ax=ax)
+        # ax = sns.heatmap(corr_mean, vmin=-1, vmax=1, mask=mask, cmap='bwr', cbar_ax=cbar_ax, xticklabels=labels, yticklabels=labels, square=True, annot=True, ax=ax)
+        ax = sns.heatmap(corr_mean, vmin=-1, vmax=1, cmap='bwr', cbar_ax=cbar_ax, xticklabels=labels, yticklabels=labels, square=True, annot=True, ax=ax)
         
         # whole figure format
         sns.despine(offset=10, trim=True)
@@ -1356,92 +1364,70 @@ class higherLevel(object):
         fig.savefig(os.path.join(self.figure_folder,'{}_pupil_information_correlation_matrix.pdf'.format(self.exp)))
                         
         print('success: pupil_information_correlation_matrix')
-    
- 
+
+
     def dataframe_evoked_correlation(self):
-        """Partial correlation of theoretic variables with other variables removed.
-        
+        """Correlation of theoretic variables with other variables removed.
+
         Notes
         -----
         Drop omission trials (in subject loop).
         Output in dataframe folder.
         """
-        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
-        
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns
+
         ivs = ['model_i', 'model_H', 'model_D']
-        
+
         pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
         df_out = pd.DataFrame() # timepoints x subjects
-        
+
         for t,time_locked in enumerate(self.time_locked):
-            
+
             for cond in ['correct', 'error', 'all_trials']:
-            
-                # Loop through IVs                
+
+                # Loop through IVs
                 for i,iv in enumerate(ivs):
-                
+
                     # loop subjects
                     for s, subj in enumerate(self.subjects):
-            
-                        this_subj = int(''.join(filter(str.isdigit, subj))) 
+
+                        this_subj = int(''.join(filter(str.isdigit, subj)))
                         # get current subject's data only
-                        
+
                         SBEHAV = DF[DF['subject']==this_subj].reset_index()
-                        SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked))))
+                        SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f'))
                         SPUPIL = SPUPIL.loc[:, ~SPUPIL.columns.str.contains('^Unnamed')] # remove all unnamed columns
-                    
+
                         # merge behavioral and evoked dataframes so we can group by conditions
                         SDATA = pd.concat([SBEHAV,SPUPIL],axis=1)
-                    
+
                         #### DROP OMISSIONS HERE ####
                         SDATA = SDATA[SDATA['drop_trial'] == 0] # drop outliers based on RT
                         #############################
-                    
+
                         evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
-                    
+
                         save_timepoint_r = []
-                        
+
                         # loop timepoints, regress
                         for col in evoked_cols:
-                            
-                            # First remove other ivs from current iv with linear regression    
-                            remove_ivs = [i for i in ivs if not i == iv]
-                        
-                            # model: iv1 ~ constant + iv2 + iv3, take residuals into correlation with pupil
-                            Y = np.array(SDATA[iv]) # current iv
-                            X = SDATA[remove_ivs]
-                            
-                            # remove all missing cases
-                            X['Y'] = Y
-                            X['pupil'] = np.array(SDATA[col]) # pupil
-                            X.dropna(subset=X.columns.values, inplace=True)
-                            Y = X['Y']
-                            y = X['pupil']
-                            X.drop(columns=['Y', 'pupil'], inplace=True)
-                            
+                            Y = SDATA[col] # pupil
+                            X = SDATA[iv] # iv
+
                             if cond == 'correct':
                                 mask = SDATA['correct']==True
-                                X = X[mask] # ivs to partial out
-                                Y = Y[mask] # current iv
-                                y = y[mask]
+                                Y = Y[mask] # pupil 
+                                X = X[mask] # IV
                             elif cond == 'error':
                                 mask = SDATA['correct']==False
-                                X = X[mask]
-                                Y = Y[mask]
-                                y = y[mask]
-                    
-                            X = sm.add_constant(X)
-
-                            # partial correlation via ordinary least squares linear regression, get residuals
-                            model = sm.OLS(Y, X, missing='drop')
-                            results = model.fit()
-                            x = results.resid # residuals of theoretic variable regression
-                        
-                            r, pval = sp.stats.pearsonr(x, y)
+                                Y = Y[mask] # pupil 
+                                X = X[mask] # IV
+                            
+                            r, pval = sp.stats.pearsonr(np.array(X), np.array(Y))
 
                             save_timepoint_r.append(self.fisher_transform(r))
-                            
+
                         # add column for each subject with timepoints as rows
                         df_out[subj] = np.array(save_timepoint_r)
                         df_out[subj] = df_out[subj].apply(lambda x: '%.16f' % x) # remove scientific notation from df
@@ -1486,7 +1472,7 @@ class higherLevel(object):
         
         for i,iv in enumerate(ivs):
             # Compute means, sems across group
-            COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, 'all_trials', iv)))
+            COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, 'all_trials', iv)), float_precision='%.16f')
             COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
 
             # plot time series
@@ -1546,7 +1532,7 @@ class higherLevel(object):
             for i, cond in enumerate(['error', 'correct']):
             
                 # Compute means, sems across group
-                COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, cond, iv)))
+                COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, cond, iv)), float_precision='%.16f')
                 COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
 
                 TS = np.array(COND.T)
@@ -1585,186 +1571,569 @@ class higherLevel(object):
         print('success: plot_pupil_information_regression_evoked')
         
 
-    def information_evoked_get_phasics(self,):
-        """Compute average partial correlation coefficients in selected time window per trial and adds average to behavioral data frame. 
-        
-        Notes
-        -----
-        Always target_locked pupil response.
-        Partial correlations are done for all trials as well as for correct and error trials separately.
-        """
-        
-        ivs = ['model_i', 'model_H', 'model_D']
-        
-        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
-        # sort by subjects then trial_counter in ascending order
-        DF.sort_values(by=['subject', 'trial_num'], ascending=True, inplace=True)
-        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
-        
-        # loop theoretic variables
-        for iv in ivs:
-            
-            for cond in ['correct', 'error', 'all_trials']:
-            
-                # loop through each type of event to lock events to...
-                for t,time_locked in enumerate(self.time_locked):
-                
-                    df_out = pd.DataFrame()
-                
-                    # load evoked pupil file (all subjects as columns and time points as rows)
-                    df_pupil = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, cond, iv)))
-                    df_pupil = df_pupil.loc[:, ~df_pupil.columns.str.contains('^Unnamed')] # remove all unnamed columns
-            
-                    pupil_step_lim = self.pupil_step_lim[t] # kernel size is always the same for each event type
-                
-                    for twi,pupil_time_of_interest in enumerate(self.pupil_time_of_interest[t]): # multiple time windows to average                
-                    
-                        save_phasics = []
-                    
-                        # loop subjects
-                        for s,subj in enumerate(self.subjects):
-                        
-                            P = np.array(df_pupil[subj]) # current subject
-                            
-                            # in seconds
-                            phase_start = -pupil_step_lim[0] + pupil_time_of_interest[0]
-                            phase_end = -pupil_step_lim[0] + pupil_time_of_interest[1]
-                            # in sample rate units
-                            phase_start = int(phase_start*self.sample_rate)
-                            phase_end = int(phase_end*self.sample_rate)
-                            # mean within phasic time window
-                            this_phasic = np.nanmean(P[phase_start:phase_end]) 
-                        
-                            save_phasics.append(this_phasic)
-                            print(subj)
-                        # save phasics
-                        df_out['coeff_{}_t{}'.format(time_locked,twi+1)] = np.array(save_phasics)
-                
-                #######################
-                df_out['subject'] = self.subjects
-                df_out.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, cond, iv)), float_format='%.16f')
-            
-            # combine error and correct for 2-way interaction test in JASP
-            df_error = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'error', iv)))
-            df_correct = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'correct', iv)))
-            
-            df_error.rename(columns={"coeff_feed_locked_t1": "coeff_feed_locked_t1_error", "coeff_feed_locked_t2": "coeff_feed_locked_t2_error"}, inplace=True)
-            df_correct.rename(columns={"coeff_feed_locked_t1": "coeff_feed_locked_t1_correct", "coeff_feed_locked_t2": "coeff_feed_locked_t2_correct"}, inplace=True)
-            
-            df_anova = pd.concat([df_error, df_correct], axis=1)
-            df_anova = df_anova.loc[:, ~df_anova.columns.str.contains('^Unnamed')] # drop all unnamed columns
-            
-            df_anova.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'accuracy_anova', iv)), float_format='%.16f')            
-            
-        print('success: information_evoked_get_phasics')
-        
-    
-    def plot_information_phasics(self, ):
-        """Plot the group level average correlation coefficients in each time window across all trials.
+    def average_information_conditions(self, ):
+        """Average the model parameters per subject per condition of interest. 
 
         Notes
         -----
-        3 figures, GROUP LEVEL DATA
-        x-axis time window.
-        Figure output as PDF in figure folder.
-        """
-        dvs = ['model_i', 'model_H', 'model_D']
-        ylabels = ['r', 'r', 'r']
-        xlabel = 'Time window'
-        xticklabels = ['Early','Late'] 
-        colors = ['teal', 'orange', 'purple']
-        bar_width = 0.7
-        xind = np.arange(len(xticklabels))
-        ylim = [-0.3, 0.3]
+        Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
+        self.freq_cond argument determines how the trials were split
+        """     
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
+        DF.sort_values(by=['subject','trial_num'],inplace=True)
+        DF.reset_index()
         
-        for dvi, model_dv in enumerate(dvs):
-            # single figure
-            fig = plt.figure(figsize=(2,2))
-            ax = fig.add_subplot(111)
+        ############################
+        # drop outliers and missing trials
+        DF = DF[DF['drop_trial']==0]
+        ############################
+        
+        #interaction accuracy and frequency
+        for pupil_dv in ['model_i', 'model_H', 'model_D']: #interaction accuracy and frequency
             
-            DFIN = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'all_trials', model_dv)))
-            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
-            DFIN.drop(['subject'], axis=1, inplace=True)            
-            
-            # Group average per BIN WINDOW
-            GROUP = np.mean(DFIN)
-            SEM = np.true_divide(np.std(DFIN),np.sqrt(len(self.subjects)))
-            print(GROUP)
-                        
-            ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
-                       
-            # plot bar graph
-            ax.bar(xind, GROUP, width=bar_width, yerr=SEM, capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
-                        
-            # individual points, repeated measures connected with lines
-            for s in np.arange(DFIN.shape[0]):
-                ax.plot(xind, DFIN.iloc[s,:], linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=0.2) # marker, line, black
+            '''
+            ######## CORRECT x FREQUENCY ########
+            '''
+            # MEANS subject x bin x tone x congruent
+            DFOUT = DF.groupby(['subject','correct',self.freq_cond])[pupil_dv].mean()
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-frequency_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # FOR PLOTTING
 
-            # set figure parameters
-            ax.set_ylabel(ylabels[dvi])
-            ax.set_xlabel(xlabel)
-            # ax.set_ylim(ylim)
-            ax.set_xticks(xind)
-            ax.set_xticklabels(xticklabels)
+            # save for RMANOVA format
+            DFANOVA =  DFOUT.unstack([self.freq_cond,'correct',]) 
+            print(DFANOVA.columns)
+            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-frequency_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
+            '''
+            ######## CORRECT ########
+            '''
+            # MEANS subject x bin x tone x congruent
+            DFOUT = DF.groupby(['subject','correct'])[pupil_dv].mean()
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # FOR PLOTTING
 
-            sns.despine(offset=10, trim=True)
-            plt.tight_layout()
-            fig.savefig(os.path.join(self.figure_folder,'{}_correlation_phasic_{}.pdf'.format(self.exp, model_dv)))
-        print('success: plot_information_phasics')
+            # save for RMANOVA format
+            DFANOVA =  DFOUT.unstack(['correct',]) 
+            print(DFANOVA.columns)
+            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
         
-        
-    def plot_information_phasics_accuracy_split(self,):
-        """Plot the average correlation coefficients in each time window split by error vs. correct.
+        '''
+        ######## FREQUENCY ########
+        '''
+        for pupil_dv in ['model_i', 'model_H', 'model_D']: # mean accuracy
+            DFOUT = DF.groupby(['subject',self.freq_cond])[pupil_dv].mean()
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_frequency_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # For descriptives
+            # save for RMANOVA format
+            DFANOVA =  DFOUT.unstack([self.freq_cond]) 
+            print(DFANOVA.columns)
+            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
+        print('success: average_information_conditions')
+
+
+    def plot_information(self, ):
+        """Plot the model parameters across trials and average over subjects
 
         Notes
         -----
         1 figure, GROUP LEVEL DATA
-        x-axis time window.
+        x-axis is frequency conditions.
         Figure output as PDF in figure folder.
         """
-        dvs = ['model_i', 'model_H', 'model_D']
-        ylabels = ['r', 'r', 'r']
-        xlabel = 'Time window'
-        xticklabels = ['Early','Late'] 
-        colors = ['red', 'blue']
+        dvs = ['model_D', 'model_i','model_H']
+        ylabels = ['KL divergence', 'Surprise', 'Entropy', ]
+        xlabel = 'Trials'
+        colors = [ 'purple', 'teal', 'orange',]    
+        
+        fig = plt.figure(figsize=(2,4))
+        
+        for dvi, pupil_dv in enumerate(dvs):
+
+            ax = fig.add_subplot(3, 1, dvi+1) # 1 subplot per bin windo
+            
+            DFIN = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+                        
+            subject_array = np.zeros((len(self.subjects), np.max(DFIN['trial_num'])+1))
+        
+            for s, subj in enumerate(self.subjects):
+                this_subj = int(''.join(filter(str.isdigit, subj)))
+                this_df = DFIN[DFIN['subject']==this_subj].copy()        
+                subject_array[s,:] = np.ravel(this_df[[pupil_dv]])
+                            
+            self.tsplot(ax, subject_array, color=colors[dvi], label=ylabels[dvi])
+    
+            # set figure parameters
+            ax.set_xlim([0, np.max(DFIN['trial_num'])+1])
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabels[dvi])
+            # ax.legend()
+        
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_information_trials.pdf'.format(self.exp)))
+        print('success: plot_information')
+        
+
+    def plot_information_frequency(self,):
+        """Plot the model parameteres by frequency condition
+
+        Notes
+        -----
+        GROUP LEVEL DATA
+        x-axis is frequency conditions.
+        Figure output as PDF in figure folder.
+        """
+        #######################
+        # Frequency
+        #######################
+        dvs = [ 'model_D', 'model_i', 'model_H']
+        ylabels = ['KL divergence', 'Surprise', 'Entropy']
+        factor = self.freq_cond
+        xlabel = 'Letter-color frequency'
+        xticklabels = ['20%','40%','80%'] 
         bar_width = 0.7
         xind = np.arange(len(xticklabels))
-        ylim = [-0.3, 0.3]
+    
+        colors = ['purple', 'teal', 'orange']
         
-        for dvi, model_dv in enumerate(dvs):
-            # single figure
-            fig = plt.figure(figsize=(2,2))
-            ax = fig.add_subplot(111) # 1 subplot per bin windo
+        fig = plt.figure(figsize=(4,2))
+        
+        for dvi,pupil_dv in enumerate(dvs):
+            
+            ax = fig.add_subplot(1, 3, dvi+1) # 1 subplot per bin window
 
-            for c, cond in enumerate(['error', 'correct']):
-                
-                df_in = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, cond, model_dv)))
-                df_in = df_in.loc[:, ~df_in.columns.str.contains('^Unnamed')] # drop all unnamed columns
-                df_in.drop(['subject'], axis=1, inplace=True)            
-                
-                SEM = np.true_divide(np.std(df_in),np.sqrt(len(self.subjects)))
-                
-                # plot bar graph
-                ax.errorbar(xind, np.mean(df_in), yerr=SEM,  marker='o', markersize=3, fmt='-', elinewidth=1, label=cond, capsize=3, color=colors[c], alpha=1)                
-                        
-            ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,'frequency',pupil_dv)), float_precision='%.16f')
+            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+            
+            # Group average 
+            GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
+            GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
+            print(GROUP)
+            
+            # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
                        
+            # plot bar graph
+            for xi,x in enumerate(GROUP[factor]):
+                ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
+                
+            # individual points, repeated measures connected with lines
+            # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
+            # DFIN = DFIN.unstack(factor)
+            # for s in np.array(DFIN):
+            #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.1) # marker, line, black
+                
             # set figure parameters
+            # ax.set_title(ylabels[dvi]) # repeat for consistent formatting
             ax.set_ylabel(ylabels[dvi])
             ax.set_xlabel(xlabel)
-            # ax.set_ylim(ylim)
             ax.set_xticks(xind)
             ax.set_xticklabels(xticklabels)
-            ax.set_title(model_dv)
-            # ax.legend()
+            # if pupil_dv == 'model_D':
+            #     ax.set_ylim([0.0042, 0.0048])
+            # if pupil_dv == 'model_i':
+            #     ax.set_ylim([4.95, 5.1])
+            # if pupil_dv == 'model_H':
+            #     ax.set_ylim([4.85, 4.90])
 
-            sns.despine(offset=10, trim=True)
-            plt.tight_layout()
-            fig.savefig(os.path.join(self.figure_folder,'{}_correlation_phasic_accuracy_split_{}.pdf'.format(self.exp, model_dv)))
-        print('success: plot_information_phasics_accuracy_split')      
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_information_frequency.pdf'.format(self.exp)))
+        print('success: plot_information_frequency')
         
+
         
 # not using
+    #
+    # def partial_correlation_information(self,):
+    #     """Carry out the partial correlations of the three model parameters
+    #
+    #     Notes
+    #     -----
+    #     Model estimates that are correlated per subject the tested at group level:
+    #     model_i = surprise of current element at current trial
+    #     model_H = negative entropy at current trial
+    #     model_D = KL-divergence at current trial
+    #
+    #     """
+    #
+    #     ivs = ['model_i', 'model_H', 'model_D']
+    #     labels = ['i' , 'H', 'KL']
+    #
+    #     fn_in = os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp))
+    #     DF = pd.read_csv(fn_in, float_precision='%.16f')
+    #
+    #
+    #     for i,iv in enumerate(ivs):
+    #
+    #         save_iv = [] # append clean model parameters here
+    #
+    #         # loop subjects
+    #         for s, subj in enumerate(self.subjects):
+    #
+    #             this_subj = int(''.join(filter(str.isdigit, subj)))
+    #             # get current subject's data only
+    #             this_df = DF[DF['subject']==this_subj].copy(deep=False)
+    #
+    #             # First remove other ivs from current iv with linear regression
+    #             remove_ivs = [i for i in ivs if not i == iv]
+    #
+    #             # model: iv1 ~ constant + iv2 + iv3, take residuals into correlation with pupil
+    #             Y = np.array(this_df[iv]) # current iv
+    #             X = this_df[remove_ivs]
+    #
+    #             # partial correlation via ordinary least squares linear regression, get residuals
+    #             model = sm.OLS(Y, X, missing='drop')
+    #             results = model.fit()
+    #             x = results.resid # residuals of theoretic variable regression
+    #
+    #             shell()
+    #             save_iv.append(x)
+    #
+    #         DF['{}_clean'.format(iv)] = np.concatenate(save_iv)
+    #
+    #     # save whole DF
+    #     DF.to_csv(fn_in, float_format='%.16f') # overwrite subjects dataframe
+    #
+    #     print('success: partial_correlation_information')
+        
+    
+    #
+    # def plot_information_pe(self,):
+    #     """Plot the model parameters interaction frequency and accuracy in each trial bin window.
+    #
+    #     Notes
+    #     -----
+    #     4 figures: per DV
+    #     GROUP LEVEL DATA
+    #     Separate lines for correct, x-axis is frequency conditions.
+    #     """
+    #     tick_spacer = [1, 1, 2, .2]
+    #
+    #     dvs = ['model_i', 'model_H', 'model_D']
+    #     ylabels = ['Surprise', 'Negative entropy', 'KL divergence']
+    #     factor = [self.freq_cond,'correct']
+    #     xlabel = 'Letter-color frequency'
+    #     xticklabels = ['20%','40%','80%']
+    #     labels = ['Error','Correct']
+    #     colors = ['red','blue']
+    #
+    #     xind = np.arange(len(xticklabels))
+    #     dot_offset = [0.05,-0.05]
+    #
+    #     for dvi,pupil_dv in enumerate(dvs):
+    #
+    #         fig = plt.figure(figsize=(2, 2))
+    #         ax = fig.add_subplot(111)
+    #
+    #         DFIN = pd.read_csv(os.path.join(self.trial_bin_folder, '{}_correct-frequency_{}.csv'.format(self.exp, pupil_dv)), float_precision='%.16f')
+    #         DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+    #
+    #         # Group average per BIN WINDOW
+    #         GROUP = pd.DataFrame(DFIN.groupby(factor)[pupil_dv].agg(['mean', 'std']).reset_index())
+    #         GROUP['sem'] = np.true_divide(GROUP['std'], np.sqrt(len(self.subjects)))
+    #         print(GROUP)
+    #
+    #         # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+    #
+    #         # # plot line graph
+    #         for x in[0,1]: # split by error, correct
+    #             D = GROUP[GROUP['correct']==x]
+    #             print(D)
+    #             ax.errorbar(xind, np.array(D['mean']), yerr=np.array(D['sem']), marker='o', markersize=3, fmt='-', elinewidth=1, label=labels[x], capsize=3, color=colors[x], alpha=1)
+    #
+    #         # set figure parameters
+    #         ax.set_title('{}'.format(pupil_dv))
+    #         ax.set_ylabel(ylabels[dvi])
+    #         ax.set_xlabel(xlabel)
+    #         ax.set_xticks(xind)
+    #         ax.set_xticklabels(xticklabels)
+    #         # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer[dvi]))
+    #         # ax.legend()
+    #
+    #         sns.despine(offset=10, trim=True)
+    #         plt.tight_layout()
+    #         fig.savefig(os.path.join(self.figure_folder, '{}_correct-frequency_{}_lines.pdf'.format(self.exp, pupil_dv)))
+    #     print('success: plot_information_pe')
+    #
+    #
+    #
+    # def information_evoked_get_phasics(self,):
+    #     """Compute average partial correlation coefficients in selected time window per trial and adds average to behavioral data frame.
+    #
+    #     Notes
+    #     -----
+    #     Always target_locked pupil response.
+    #     Partial correlations are done for all trials as well as for correct and error trials separately.
+    #     """
+    #
+    #     ivs = ['model_i', 'model_H', 'model_D']
+    #
+    #     DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+    #     # sort by subjects then trial_counter in ascending order
+    #     DF.sort_values(by=['subject', 'trial_num'], ascending=True, inplace=True)
+    #     DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns
+    #
+    #     # loop theoretic variables
+    #     for iv in ivs:
+    #
+    #         for cond in ['correct', 'error', 'all_trials']:
+    #
+    #             # loop through each type of event to lock events to...
+    #             for t,time_locked in enumerate(self.time_locked):
+    #
+    #                 df_out = pd.DataFrame()
+    #
+    #                 # load evoked pupil file (all subjects as columns and time points as rows)
+    #                 df_pupil = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, cond, iv)), float_precision='%.16f')
+    #                 df_pupil = df_pupil.loc[:, ~df_pupil.columns.str.contains('^Unnamed')] # remove all unnamed columns
+    #
+    #                 pupil_step_lim = self.pupil_step_lim[t] # kernel size is always the same for each event type
+    #
+    #                 for twi,pupil_time_of_interest in enumerate(self.pupil_time_of_interest[t]): # multiple time windows to average
+    #
+    #                     save_phasics = []
+    #
+    #                     # loop subjects
+    #                     for s,subj in enumerate(self.subjects):
+    #
+    #                         P = np.array(df_pupil[subj]) # current subject
+    #
+    #                         # in seconds
+    #                         phase_start = -pupil_step_lim[0] + pupil_time_of_interest[0]
+    #                         phase_end = -pupil_step_lim[0] + pupil_time_of_interest[1]
+    #                         # in sample rate units
+    #                         phase_start = int(phase_start*self.sample_rate)
+    #                         phase_end = int(phase_end*self.sample_rate)
+    #                         # mean within phasic time window
+    #                         this_phasic = np.nanmean(P[phase_start:phase_end])
+    #
+    #                         save_phasics.append(this_phasic)
+    #                         print(subj)
+    #                     # save phasics
+    #                     df_out['coeff_{}_t{}'.format(time_locked,twi+1)] = np.array(save_phasics)
+    #
+    #             #######################
+    #             df_out['subject'] = self.subjects
+    #             df_out.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, cond, iv)), float_format='%.16f')
+    #
+    #         # combine error and correct for 2-way interaction test in JASP
+    #         df_error = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'error', iv)), float_precision='%.16f')
+    #         df_correct = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'correct', iv)), float_precision='%.16f')
+    #
+    #         df_error.rename(columns={"coeff_feed_locked_t1": "coeff_feed_locked_t1_error", "coeff_feed_locked_t2": "coeff_feed_locked_t2_error"}, inplace=True)
+    #         df_correct.rename(columns={"coeff_feed_locked_t1": "coeff_feed_locked_t1_correct", "coeff_feed_locked_t2": "coeff_feed_locked_t2_correct"}, inplace=True)
+    #
+    #         df_anova = pd.concat([df_error, df_correct], axis=1)
+    #         df_anova = df_anova.loc[:, ~df_anova.columns.str.contains('^Unnamed')] # drop all unnamed columns
+    #
+    #         df_anova.to_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'accuracy_anova', iv)), float_format='%.16f')
+    #
+    #     print('success: information_evoked_get_phasics')
+    #
+    #
+    # def plot_information_phasics(self, ):
+    #     """Plot the group level average correlation coefficients in each time window across all trials.
+    #
+    #     Notes
+    #     -----
+    #     3 figures, GROUP LEVEL DATA
+    #     x-axis time window.
+    #     Figure output as PDF in figure folder.
+    #     """
+    #     dvs = ['model_i', 'model_H', 'model_D']
+    #     ylabels = ['r', 'r', 'r']
+    #     xlabel = 'Time window'
+    #     xticklabels = ['Early','Late']
+    #     colors = ['teal', 'orange', 'purple']
+    #     bar_width = 0.7
+    #     xind = np.arange(len(xticklabels))
+    #     ylim = [-0.3, 0.3]
+    #
+    #     for dvi, model_dv in enumerate(dvs):
+    #         # single figure
+    #         fig = plt.figure(figsize=(2,2))
+    #         ax = fig.add_subplot(111)
+    #
+    #         DFIN = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, 'all_trials', model_dv)), float_precision='%.16f')
+    #         DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+    #         DFIN.drop(['subject'], axis=1, inplace=True)
+    #
+    #         # Group average per BIN WINDOW
+    #         GROUP = np.mean(DFIN)
+    #         SEM = np.true_divide(np.std(DFIN),np.sqrt(len(self.subjects)))
+    #         print(GROUP)
+    #
+    #         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+    #
+    #         # plot bar graph
+    #         ax.bar(xind, GROUP, width=bar_width, yerr=SEM, capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
+    #
+    #         # individual points, repeated measures connected with lines
+    #         for s in np.arange(DFIN.shape[0]):
+    #             ax.plot(xind, DFIN.iloc[s,:], linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=0.2) # marker, line, black
+    #
+    #         # set figure parameters
+    #         ax.set_ylabel(ylabels[dvi])
+    #         ax.set_xlabel(xlabel)
+    #         # ax.set_ylim(ylim)
+    #         ax.set_xticks(xind)
+    #         ax.set_xticklabels(xticklabels)
+    #
+    #         sns.despine(offset=10, trim=True)
+    #         plt.tight_layout()
+    #         fig.savefig(os.path.join(self.figure_folder,'{}_correlation_phasic_{}.pdf'.format(self.exp, model_dv)))
+    #     print('success: plot_information_phasics')
+    #
+    #
+    # def plot_information_phasics_accuracy_split(self,):
+    #     """Plot the average correlation coefficients in each time window split by error vs. correct.
+    #
+    #     Notes
+    #     -----
+    #     1 figure, GROUP LEVEL DATA
+    #     x-axis time window.
+    #     Figure output as PDF in figure folder.
+    #     """
+    #     dvs = ['model_i', 'model_H', 'model_D']
+    #     ylabels = ['r', 'r', 'r']
+    #     xlabel = 'Time window'
+    #     xticklabels = ['Early','Late']
+    #     colors = ['red', 'blue']
+    #     bar_width = 0.7
+    #     xind = np.arange(len(xticklabels))
+    #     ylim = [-0.3, 0.3]
+    #
+    #     for dvi, model_dv in enumerate(dvs):
+    #         # single figure
+    #         fig = plt.figure(figsize=(2,2))
+    #         ax = fig.add_subplot(111) # 1 subplot per bin windo
+    #
+    #         for c, cond in enumerate(['error', 'correct']):
+    #
+    #             df_in = pd.read_csv(os.path.join(self.jasp_folder, '{}_correlation_phasic_{}_{}.csv'.format(self.exp, cond, model_dv)), float_precision='%.16f')
+    #             df_in = df_in.loc[:, ~df_in.columns.str.contains('^Unnamed')] # drop all unnamed columns
+    #             df_in.drop(['subject'], axis=1, inplace=True)
+    #
+    #             SEM = np.true_divide(np.std(df_in),np.sqrt(len(self.subjects)))
+    #
+    #             # plot bar graph
+    #             ax.errorbar(xind, np.mean(df_in), yerr=SEM,  marker='o', markersize=3, fmt='-', elinewidth=1, label=cond, capsize=3, color=colors[c], alpha=1)
+    #
+    #         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+    #
+    #         # set figure parameters
+    #         ax.set_ylabel(ylabels[dvi])
+    #         ax.set_xlabel(xlabel)
+    #         # ax.set_ylim(ylim)
+    #         ax.set_xticks(xind)
+    #         ax.set_xticklabels(xticklabels)
+    #         ax.set_title(model_dv)
+    #         # ax.legend()
+    #
+    #         sns.despine(offset=10, trim=True)
+    #         plt.tight_layout()
+    #         fig.savefig(os.path.join(self.figure_folder,'{}_correlation_phasic_accuracy_split_{}.pdf'.format(self.exp, model_dv)))
+    #     print('success: plot_information_phasics_accuracy_split')
+
+
+
+
+ 
+    # def dataframe_evoked_correlation(self):
+    #     """Partial correlation of theoretic variables with other variables removed.
+    #
+    #     Notes
+    #     -----
+    #     Drop omission trials (in subject loop).
+    #     Output in dataframe folder.
+    #     """
+    #     DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+    #     DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns
+    #
+    #     ivs = ['model_i', 'model_H', 'model_D']
+    #
+    #     pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
+    #     df_out = pd.DataFrame() # timepoints x subjects
+    #
+    #     for t,time_locked in enumerate(self.time_locked):
+    #
+    #         for cond in ['correct', 'error', 'all_trials']:
+    #
+    #             # Loop through IVs
+    #             for i,iv in enumerate(ivs):
+    #
+    #                 # loop subjects
+    #                 for s, subj in enumerate(self.subjects):
+    #
+    #                     this_subj = int(''.join(filter(str.isdigit, subj)))
+    #                     # get current subject's data only
+    #
+    #                     SBEHAV = DF[DF['subject']==this_subj].reset_index()
+    #                     SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked))), float_precision='%.16f')
+    #                     SPUPIL = SPUPIL.loc[:, ~SPUPIL.columns.str.contains('^Unnamed')] # remove all unnamed columns
+    #
+    #                     # merge behavioral and evoked dataframes so we can group by conditions
+    #                     SDATA = pd.concat([SBEHAV,SPUPIL],axis=1)
+    #
+    #                     #### DROP OMISSIONS HERE ####
+    #                     SDATA = SDATA[SDATA['drop_trial'] == 0] # drop outliers based on RT
+    #                     #############################
+    #
+    #                     evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
+    #
+    #                     save_timepoint_r = []
+    #
+    #                     # loop timepoints, regress
+    #                     for col in evoked_cols:
+    #
+    #                         # First remove other ivs from current iv with linear regression
+    #                         remove_ivs = [i for i in ivs if not i == iv]
+    #
+    #                         # model: iv1 ~ constant + iv2 + iv3, take residuals into correlation with pupil
+    #                         Y = np.array(SDATA[iv]) # current iv
+    #                         X = SDATA[remove_ivs]
+    #
+    #                         # remove all missing cases
+    #                         X['Y'] = Y
+    #                         X['pupil'] = np.array(SDATA[col]) # pupil
+    #                         X.dropna(subset=X.columns.values, inplace=True)
+    #                         Y = X['Y']
+    #                         y = X['pupil']
+    #                         X.drop(columns=['Y', 'pupil'], inplace=True)
+    #
+    #                         if cond == 'correct':
+    #                             mask = SDATA['correct']==True
+    #                             X = X[mask] # ivs to partial out
+    #                             Y = Y[mask] # current iv
+    #                             y = y[mask]
+    #                         elif cond == 'error':
+    #                             mask = SDATA['correct']==False
+    #                             X = X[mask]
+    #                             Y = Y[mask]
+    #                             y = y[mask]
+    #
+    #                         X = sm.add_constant(X)
+    #
+    #                         # partial correlation via ordinary least squares linear regression, get residuals
+    #                         model = sm.OLS(Y, X, missing='drop')
+    #                         results = model.fit()
+    #                         x = results.resid # residuals of theoretic variable regression
+    #
+    #                         r, pval = sp.stats.pearsonr(x, y)
+    #
+    #                         save_timepoint_r.append(self.fisher_transform(r))
+    #
+    #                     # add column for each subject with timepoints as rows
+    #                     df_out[subj] = np.array(save_timepoint_r)
+    #                     df_out[subj] = df_out[subj].apply(lambda x: '%.16f' % x) # remove scientific notation from df
+    #
+    #                 # save output file
+    #                 df_out.to_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_correlation_{}_{}.csv'.format(self.exp, time_locked, cond, iv)), float_format='%.16f')
+    #     print('success: dataframe_evoked_regression')
+
+
 
     # def confound_rt_pupil(self,):
     #     """Compute single-trial correlation between RT and pupil_dvs, subject and group level

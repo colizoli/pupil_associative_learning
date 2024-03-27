@@ -271,9 +271,9 @@ class higherLevel(object):
         print('success: calculate_actual_frequencies')
         
     
-    def information_theory_code_stimuli(self, fn_in):
+    def information_theory_code_stimuli(self, df_in):
         
-        df_in = pd.read_csv(fn_in)
+        # df_in = pd.read_csv(fn_in)
         
         # make new column to give each letter-color combination a unique identifier (1 - 36)        
         mapping = [
@@ -319,13 +319,14 @@ class higherLevel(object):
             (df_in['letter'] == 'T') & (df_in['r'] == 3) & (df_in['oddball'] == 0), 
             (df_in['letter'] == 'T') & (df_in['r'] == 138) & (df_in['oddball'] == 0), 
             (df_in['letter'] == 'T') & (df_in['r'] == 75) & (df_in['oddball'] == 0), 
+            
             ]
         
-        elements = np.arange(36) # also elements is the same as priors (start with 0 so they can be indexed by element)
+        elements = np.arange(36)  # also elements is the same as priors (start with 0 so they can be indexed by element)
         df_in['letter_color_pair'] = np.select(mapping, elements)
-        
-        df_in.to_csv(fn_in) # save with new columns
         print('success: information_theory_code_stimuli')
+        
+        return df_in
         
         
     def idt_model(self, df, df_data_column, elements):
@@ -334,58 +335,59 @@ class higherLevel(object):
     
         # initialize output variables for current subject
         model_e = [] # trial sequence
-        model_P = [] # probabilities of all elements at each trial
-        model_p = [] # probability of current element at current trial
-    
+        model_P = [] # probabilities of all elements 
+        model_p = [] # probability of current element 
+        model_i = [] # surprise
+        
         # loop trials
         for t in np.arange(df.shape[0]):
             vector = data[:t+1] #  trial number starts at 0, all the targets that have been seen so far
-
+            
             # if it's the first trial, our expectations are based only on the prior (values)
             if t < 1: 
                 alpha1 = np.ones(len(elements)) # np.sum(alpha) == len(elements), flat prior
-                p1 = alpha1 / len(elements) # probablity, i.e., np.sum(p1) == 1
-                p = p1
-    
-            # Updated estimated probabilities
+                
+            # Updated estimated probabilities (posterior)
             p = []
             for k in elements:
                 # +1 because in the prior there is one element of the same type; +4 because in the prior there are 4 elements
                 # The influence of the prior should be sampled by a distribution or
                 # set to a certain value based on Kidd et al. (2012, 2014)
                 p.append((np.sum(vector == k) + alpha1[k]) / (len(vector) + len(alpha1)))       
-                
+
             model_e.append(vector[-1])  # element in current trial = last element in the vector
             model_P.append(p)           # probability of all elements in NEXT trial
             model_p.append(p[vector[-1]]) # probability of element in NEXT trial
-    
-        return [model_P]
+            
+            I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
+            i = I[vector[-1]]   # surprise of the current event (last element in vector)
+            model_i.append(i)
+         
+        return [model_i, model_p, model_P[-1]] # return only the last array
         
         
     def information_theory_estimates(self, ):
         # https://github.com/FrancescPoli/eye_processing/blob/master/ITDmodel.m
         
         fn_in = os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp))
-        # fn_out = os.path.join(self.dataframe_folder,'{}_subjects_information_theory.csv'.format(self.exp))
         
         # drop oddball trials
-        df_in = pd.read_csv(fn_in)
-        df_in = df_in[df_in['oddball']==0]
-        
-        # df_in.to_csv(fn_out)
-        # fn_in = fn_out
-        
-        self.information_theory_code_stimuli(fn_in) # code stimuli based on predictions and based on targets
-        
         df_in = pd.read_csv(fn_in)
         df_in = df_in.loc[:, ~df_in.columns.str.contains('^Unnamed')]
         # sort by subjects then trial_counter in ascending order
         df_in.sort_values(by=['subject', 'trial_num'], ascending=True, inplace=True)
         
-        df_out = pd.DataFrame()
-        df_prob_out = pd.DataFrame() # last probabilities all elements saved
+        df_in = df_in[df_in['oddball']==0]
         
-        elements = np.unique(df_in['letter_color_pair'])
+        # df_in.to_csv(fn_out)
+        # fn_in = fn_out
+        
+        df_in = self.information_theory_code_stimuli(df_in) # code stimuli based on predictions and based on targets
+        
+        df_out = pd.DataFrame() # add probabilities into the oddball dataframe for sanity checks
+        df_prob_out = pd.DataFrame() # prior dataframe, last probabilities of all elements saved
+        
+        elements = np.arange(36)
         
         # loop subjects
         for s,subj in enumerate(self.subjects):
@@ -393,21 +395,86 @@ class higherLevel(object):
             this_subj = int(''.join(filter(str.isdigit, subj))) # get number of subject only
             # get current subjects data only
             this_df = df_in[df_in['subject']==this_subj].copy()
+            print(subj)
             
             # the input to the model is the trial sequence = the order of letter-color pair for each participant
-            [model_P] = self.idt_model(this_df, 'letter_color_pair', elements)
-            
+            [model_i, model_p, model_P] = self.idt_model(this_df, 'letter_color_pair', elements)
             # add to priors dataframe
-            # this_df['model_P'] = np.array(model_p)
-            # df_out = pd.concat([df_out, this_df])    # add current subject df to larger df
+            df_prob_out['{}'.format(this_subj)] = np.array(model_P)
             
-            df_prob_out['{}'.format(this_subj)] = np.array(model_P[-1])
             print(subj)
-        
+                        
+            # get probabilities into df_in to check based on frequency condition
+            this_df['model_p'] = np.array(model_p)
+            this_df['model_i'] = np.array(model_i)
+            
+            df_out = pd.concat([df_out, this_df])    # add current subject df to larger df
+
+        # save only priors (elements x subjects)
         df_prob_out.to_csv(os.path.join(self.dataframe_folder,'{}_subjects_priors.csv'.format(self.exp)), float_format='%.8f')
-        # save whole DF
-        df_out.to_csv(fn_in) # overwrite subjects dataframe
+        
+        # save all trials, except oddballs, with probability per trial
+        df_out.to_csv(os.path.join(self.dataframe_folder,'{}_subjects_information_theory.csv'.format(self.exp))) # overwrite subjects dataframe
         print('success: information_theory_estimates')
 
 
+    def plot_information_frequency(self,):
+        """Plot the model parameteres by frequency condition
+
+        Notes
+        -----
+        GROUP LEVEL DATA
+        x-axis is frequency conditions.
+        Figure output as PDF in figure folder.
+        """
+        #######################
+        # Frequency
+        #######################
+        dvs = ['model_p', 'model_i']
+        ylabels = ['Probability', 'Surprise']
+        factor = 'frequency'
+        xlabel = 'Letter-color frequency'
+        xticklabels = ['20%','40%','80%'] 
+        bar_width = 0.7
+        xind = np.arange(len(xticklabels))
+    
+        colors = ['lightblue', 'teal']
+        
+        fig = plt.figure(figsize=(2.67,2))
+        
+        for dvi,pupil_dv in enumerate(dvs):
+            
+            ax = fig.add_subplot(1, 2, dvi+1) # 1 subplot per bin window
+
+            DFIN = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects_information_theory.csv'.format(self.exp)), float_precision='%.16f') # overwrite subjects dataframe
+            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+            
+            # Group average 
+            GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
+            GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
+            print(GROUP)
+            
+            # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+                       
+            # plot bar graph
+            for xi,x in enumerate(GROUP[factor]):
+                ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
+                
+            # # individual points, repeated measures connected with lines
+            # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
+            # DFIN = DFIN.unstack(factor)
+            # for s in np.array(DFIN):
+            #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.1) # marker, line, black
+                
+            # set figure parameters
+            ax.set_title('Oddball Task') # repeat for consistent formatting
+            ax.set_ylabel(ylabels[dvi])
+            ax.set_xlabel(xlabel)
+            ax.set_xticks(xind)
+            ax.set_xticklabels(xticklabels)
+
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_information_frequency.pdf'.format(self.exp)))
+        print('success: plot_information_frequency')
    

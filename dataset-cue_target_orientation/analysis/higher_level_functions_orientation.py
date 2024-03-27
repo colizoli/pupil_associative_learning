@@ -1141,10 +1141,10 @@ class higherLevel(object):
     
         # initialize output variables for current subject
         model_e = [] # trial sequence
-        model_P = [] # probabilities of all elements at current trial
-        model_p = [] # probability of current element at current trial
-        model_I = [] # surprise of all elements at current trial
-        model_i = [] # surprise of current element at current trial
+        model_P = [] # probabilities of all elements
+        model_p = [] # probability of current element 
+        model_I = [] # surprise of all elements 
+        model_i = [] # surprise of current element 
         model_H = [] # entropy at current trial
         model_CH = [] # cross-entropy at current trial
         model_D = []  # KL-divergence at current trial
@@ -1161,7 +1161,16 @@ class higherLevel(object):
                 alpha1 = np.ones(len(elements)) # np.sum(alpha) == len(elements), flat prior
                 p1 = alpha1 / len(elements) # probablity, i.e., np.sum(p1) == 1
                 p = p1
-
+            
+            # at every trial, we compute surprise based on the probability
+            model_P.append(p)             # probability (all elements) 
+            model_p.append(p[vector[-1]]) # probability of current element
+            # Surprise is defined by the negative log of the probability of the current trial given the previous trials.
+            I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
+            i = I[vector[-1]]   # surprise of the current event (last element in vector)
+            model_I.append(I)
+            model_i.append(i)
+            
             # EVERYTHING AFTER HERE IS CALCULATED INCLUDING CURRENT EVENT
             # Updated estimated probabilities (posterior)
             p = []
@@ -1170,17 +1179,7 @@ class higherLevel(object):
                 # The influence of the prior should be sampled by a distribution or
                 # set to a certain value based on Kidd et al. (2012, 2014)
                 p.append((np.sum(vector == k) + alpha1[k]) / (len(vector) + len(alpha1)))       
-            
-            # at every trial, we compute surprise based on the probability
-            model_P.append(p)             # probability (all elements) 
-            model_p.append(p[vector[-1]]) # probability of current element
-            
-            # Surprise is defined by the negative log of the probability of the current trial given the previous trials.
-            I = -np.log2(p)     # complexity of every event (each cue_target_pair is a potential event)
-            i = I[vector[-1]]   # surprise of the current event (last element in vector)
-            model_I.append(I)
-            model_i.append(i)
-            
+
             H = -np.sum(p * np.log2(p)) # entropy (note that np.log2(1/p) is equivalent to multiplying the whole sum by -1)
             model_H.append(H)   # entropy
             
@@ -1705,11 +1704,11 @@ class higherLevel(object):
             for x in GROUP[factor]:
                 ax.bar(xind[x],np.array(GROUP['mean'][x]), width=bar_width, yerr=np.array(GROUP['sem'][x]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
                 
-            # individual points, repeated measures connected with lines
-            DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
-            DFIN = DFIN.unstack(factor)
-            for s in np.array(DFIN):
-                ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.2) # marker, line, black
+            # # individual points, repeated measures connected with lines
+            # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
+            # DFIN = DFIN.unstack(factor)
+            # for s in np.array(DFIN):
+            #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.2) # marker, line, black
 
             # set figure parameters
             ax.set_ylabel(ylabels[dvi])
@@ -1717,7 +1716,7 @@ class higherLevel(object):
             ax.set_xticks(xind)
             ax.set_xticklabels(xticklabels)
             if pupil_dv == 'model_H':
-                ax.set_ylim([1.69, 1.84])
+                ax.set_ylim([1.7, 1.8])
 
         sns.despine(offset=10, trim=True)
         plt.tight_layout()

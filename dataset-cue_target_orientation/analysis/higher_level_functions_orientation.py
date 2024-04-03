@@ -1623,12 +1623,13 @@ class higherLevel(object):
 
 
     def plot_information(self, ):
-        """Plot the model parameters across trials and average over subjects
+        """Plot the model parameters across trials and average over subjects.
+            Then, plot the model parameters by frequency (mapping1)
 
         Notes
         -----
         1 figure, GROUP LEVEL DATA
-        x-axis is frequency conditions.
+        x-axis is trials or frequency conditions.
         Figure output as PDF in figure folder.
         """
         dvs = ['model_D', 'model_i','model_H']
@@ -1636,11 +1637,13 @@ class higherLevel(object):
         xlabel = 'Trials'
         colors = [ 'purple', 'teal', 'orange',]    
         
-        fig = plt.figure(figsize=(2,4))
+        fig = plt.figure(figsize=(4,4))
         
+        subplot_counter = 1
+        # PLOT ACROSS TRIALS
         for dvi, pupil_dv in enumerate(dvs):
 
-            ax = fig.add_subplot(3, 1, dvi+1) # 1 subplot per bin windo
+            ax = fig.add_subplot(3, 3, subplot_counter) # 1 subplot per bin windo
             
             DFIN = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
@@ -1658,70 +1661,111 @@ class higherLevel(object):
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabels[dvi])
             # ax.legend()
-        
-        # whole figure format
-        sns.despine(offset=10, trim=True)
-        plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_information_trials.pdf'.format(self.exp)))
-        print('success: plot_information')
-        
-
-    def plot_information_frequency(self, ):
-        """Plot the model parameters by frequency (mapping1)
-
-        Notes
-        -----
-        1 figure, GROUP LEVEL DATA
-        x-axis is frequency conditions.
-        Figure output as PDF in figure folder.
-        """
-        dvs = ['model_D', 'model_i','model_H']
-        ylabels = ['KL divergence', 'Surprise', 'Entropy', ]
+            subplot_counter += 1
+            
+        # PLOT ACROSS FREQUENCY CONDITIONS
         factor = 'mapping1'
         xlabel = 'Cue-target frequency'
         xticklabels = ['20%','80%'] 
-        colors = [ 'purple', 'teal', 'orange',]    
         bar_width = 0.6
         xind = np.arange(len(xticklabels))
         
-        fig = plt.figure(figsize=(4,2))
-        
         for dvi, pupil_dv in enumerate(dvs):
 
-            ax = fig.add_subplot(1, 3, dvi+1) # 1 subplot per bin windo
+                ax = fig.add_subplot(3, 3, subplot_counter) # 1 subplot per bin windo
             
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,factor,pupil_dv)), float_precision='%.16f')
-            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+                DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,factor,pupil_dv)), float_precision='%.16f')
+                DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
-            # Group average per BIN WINDOW
-            GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
-            GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
-            print(GROUP)
+                # Group average per BIN WINDOW
+                GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
+                GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
+                print(GROUP)
                         
-            # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+                # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
                        
-            # plot bar graph
-            for x in GROUP[factor]:
-                ax.bar(xind[x],np.array(GROUP['mean'][x]), width=bar_width, yerr=np.array(GROUP['sem'][x]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
+                # plot bar graph
+                for x in GROUP[factor]:
+                    ax.bar(xind[x],np.array(GROUP['mean'][x]), width=bar_width, yerr=np.array(GROUP['sem'][x]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
                 
-            # # individual points, repeated measures connected with lines
-            # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
-            # DFIN = DFIN.unstack(factor)
-            # for s in np.array(DFIN):
-            #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.2) # marker, line, black
+                # # individual points, repeated measures connected with lines
+                # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
+                # DFIN = DFIN.unstack(factor)
+                # for s in np.array(DFIN):
+                #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.2) # marker, line, black
 
-            # set figure parameters
-            ax.set_ylabel(ylabels[dvi])
-            ax.set_xlabel(xlabel)
-            ax.set_xticks(xind)
-            ax.set_xticklabels(xticklabels)
-            if pupil_dv == 'model_H':
-                ax.set_ylim([1.7, 1.8])
-
+                # set figure parameters
+                ax.set_ylabel(ylabels[dvi])
+                ax.set_xlabel(xlabel)
+                ax.set_xticks(xind)
+                ax.set_xticklabels(xticklabels)
+                if pupil_dv == 'model_H':
+                    ax.set_ylim([1.7, 1.8])
+                subplot_counter += 1
+                
+        # whole figure format
         sns.despine(offset=10, trim=True)
         plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_information_frequency.pdf'.format(self.exp)))
-        print('success: plot_information_frequency')
+        fig.savefig(os.path.join(self.figure_folder,'{}_information.pdf'.format(self.exp)))
+        print('success: plot_information')
+        
+    #
+    # def plot_information_frequency(self, ):
+    #     """Plot the model parameters by frequency (mapping1)
+    #
+    #     Notes
+    #     -----
+    #     1 figure, GROUP LEVEL DATA
+    #     x-axis is frequency conditions.
+    #     Figure output as PDF in figure folder.
+    #     """
+    #     dvs = ['model_D', 'model_i','model_H']
+    #     ylabels = ['KL divergence', 'Surprise', 'Entropy', ]
+    #     factor = 'mapping1'
+    #     xlabel = 'Cue-target frequency'
+    #     xticklabels = ['20%','80%']
+    #     colors = [ 'purple', 'teal', 'orange',]
+    #     bar_width = 0.6
+    #     xind = np.arange(len(xticklabels))
+    #
+    #     fig = plt.figure(figsize=(4,2))
+    #
+    #     for dvi, pupil_dv in enumerate(dvs):
+    #
+    #         ax = fig.add_subplot(1, 3, dvi+1) # 1 subplot per bin windo
+    #
+    #         DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,factor,pupil_dv)), float_precision='%.16f')
+    #         DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+    #
+    #         # Group average per BIN WINDOW
+    #         GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
+    #         GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
+    #         print(GROUP)
+    #
+    #         # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+    #
+    #         # plot bar graph
+    #         for x in GROUP[factor]:
+    #             ax.bar(xind[x],np.array(GROUP['mean'][x]), width=bar_width, yerr=np.array(GROUP['sem'][x]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
+    #
+    #         # # individual points, repeated measures connected with lines
+    #         # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
+    #         # DFIN = DFIN.unstack(factor)
+    #         # for s in np.array(DFIN):
+    #         #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.2) # marker, line, black
+    #
+    #         # set figure parameters
+    #         ax.set_ylabel(ylabels[dvi])
+    #         ax.set_xlabel(xlabel)
+    #         ax.set_xticks(xind)
+    #         ax.set_xticklabels(xticklabels)
+    #         if pupil_dv == 'model_H':
+    #             ax.set_ylim([1.7, 1.8])
+    #
+    #     sns.despine(offset=10, trim=True)
+    #     plt.tight_layout()
+    #     fig.savefig(os.path.join(self.figure_folder,'{}_information_frequency.pdf'.format(self.exp)))
+    #     print('success: plot_information_frequency')
 
 
 

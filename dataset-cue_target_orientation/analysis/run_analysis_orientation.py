@@ -148,8 +148,7 @@ if higher_level:
     # higherLevel.plot_pupil_information_regression_evoked()
     # higherLevel.plot_phasic_pupil_information_scatter()
     # higherLevel.average_information_conditions()
-    # higherLevel.plot_information()
-    higherLevel.plot_information_frequency()         # plots the interaction between the frequency and accuracy of the model parameters
+    higherLevel.plot_information()
 
     # not using
     # higherLevel.information_evoked_get_phasics()

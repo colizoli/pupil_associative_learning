@@ -173,8 +173,7 @@ if higher_level:
     # higherLevel.dataframe_evoked_correlation()
     # higherLevel.plot_pupil_information_regression_evoked()
     # higherLevel.average_information_conditions()
-    # higherLevel.plot_information()
-    # higherLevel.plot_information_frequency()    
+    higherLevel.plot_information()
     
     # not using
     # higherLevel.partial_correlation_information()

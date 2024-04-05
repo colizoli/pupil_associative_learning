@@ -430,6 +430,39 @@ class higherLevel(object):
         #######################
         # Frequency
         #######################
+        
+        priors = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects_priors.csv'.format(self.exp)), float_precision='%.16f') 
+        priors.reset_index(inplace=True)
+        priors = priors.rename(columns={'index': 'letter_color_pair'})
+        
+        DFIN = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects_information_theory.csv'.format(self.exp)), float_precision='%.16f') # overwrite subjects dataframe
+        DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+        
+        # loop subjects and merge priors with frequency conditions
+        save_priors = pd.DataFrame()
+        for s,subj in enumerate(self.subjects):
+
+            this_subj = int(''.join(filter(str.isdigit, subj)))
+            this_df = DFIN[DFIN['subject']==this_subj].copy()
+            
+            # get frequency conditions for this subject
+            this_freq = this_df[['frequency','letter_color_pair']]
+            # get priors for this subject
+            
+            this_priors = priors[[str(this_subj), 'letter_color_pair']]
+            
+            # merge priors and frequency on letter-color pair
+            m = this_freq.merge(this_priors,how='inner',on=['letter_color_pair'])
+            
+            # Group based on frequency condition
+            group_priors = pd.DataFrame(m.groupby(['frequency'])[str(this_subj)].mean())
+            save_priors = pd.concat([save_priors, group_priors], axis=1)
+                
+        # transpose and save data frame
+        save_priors = save_priors.T
+        save_priors.to_csv(os.path.join(self.jasp_folder,'{}_subjects_priors_by_frequency.csv'.format(self.exp)), float_format='%.16f')
+        
+        # FIGURE 
         dvs = ['model_p', 'model_i']
         ylabels = ['Probability', 'Surprise']
         factor = 'frequency'
@@ -441,37 +474,48 @@ class higherLevel(object):
         colors = ['lightblue', 'teal']
         
         fig = plt.figure(figsize=(2.67,2))
+        ax = fig.add_subplot(1, 2, 1) # 1 subplot per bin window
         
-        for dvi,pupil_dv in enumerate(dvs):
+        # probability
+        GROUP = np.mean(save_priors)
+        SEM = np.true_divide(GROUP,np.sqrt(len(self.subjects)))
+        print(GROUP)                  
+        
+        GROUP = np.array(GROUP)
+        SEM = np.array(SEM)
+                           
+        # plot bar graph
+        for xi in np.arange(len(GROUP)):
+            ax.bar(xind[xi], GROUP[xi], width=bar_width, yerr=SEM[xi], capsize=3, color=colors[0], edgecolor='black', ecolor='black')
+        
+        # set figure parameters
+        ax.set_title('Oddball Task') # repeat for consistent formatting
+        ax.set_ylabel(ylabels[0])
+        ax.set_xlabel(xlabel)
+        ax.set_xticks(xind)
+        ax.set_xticklabels(xticklabels)
+        
+        # surprise
+        ax = fig.add_subplot(1, 2, 2) # 1 subplot per bin window
+        
+        i = -np.log2(save_priors) 
+        GROUP = np.mean(i)
+        SEM = np.true_divide(GROUP,np.sqrt(len(self.subjects)))
+        print(GROUP)
+        
+        GROUP = np.array(GROUP)
+        SEM = np.array(SEM)
+        
+        # plot bar graph
+        for xi in np.arange(len(GROUP)):
+            ax.bar(xind[xi], GROUP[xi], width=bar_width, yerr=SEM[xi], capsize=3, color=colors[1], edgecolor='black', ecolor='black')
             
-            ax = fig.add_subplot(1, 2, dvi+1) # 1 subplot per bin window
-
-            DFIN = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects_information_theory.csv'.format(self.exp)), float_precision='%.16f') # overwrite subjects dataframe
-            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
-            
-            # Group average 
-            GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
-            GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
-            print(GROUP)
-            
-            # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
-                       
-            # plot bar graph
-            for xi,x in enumerate(GROUP[factor]):
-                ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
-                
-            # # individual points, repeated measures connected with lines
-            # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
-            # DFIN = DFIN.unstack(factor)
-            # for s in np.array(DFIN):
-            #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.1) # marker, line, black
-                
-            # set figure parameters
-            ax.set_title('Oddball Task') # repeat for consistent formatting
-            ax.set_ylabel(ylabels[dvi])
-            ax.set_xlabel(xlabel)
-            ax.set_xticks(xind)
-            ax.set_xticklabels(xticklabels)
+        # set figure parameters
+        ax.set_title('Oddball Task') # repeat for consistent formatting
+        ax.set_ylabel(ylabels[1])
+        ax.set_xlabel(xlabel)
+        ax.set_xticks(xind)
+        ax.set_xticklabels(xticklabels)
 
         sns.despine(offset=10, trim=True)
         plt.tight_layout()

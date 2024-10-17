@@ -168,14 +168,28 @@ if higher_level:
     
     ''' Ideal learner model
     '''
-    # higherLevel.information_theory_estimates()
+    # higherLevel.information_theory_estimates(flat_prior=False) # run model with prior distribution from odd-ball task
+    # higherLevel.average_information_conditions()
+    # higherLevel.plot_information()
+    #
+    ''' Model fits
+    '''
     # higherLevel.pupil_information_correlation_matrix()
     # higherLevel.dataframe_evoked_correlation()
     # higherLevel.plot_pupil_information_regression_evoked()
+    
+    ''' Supplementary analysis: Ideal learner model with uniform prior distribution
+    '''
+    # higherLevel.information_theory_estimates(flat_prior=True) # run model with uniform prior distribution
     # higherLevel.average_information_conditions()
-    higherLevel.plot_information()
+    # higherLevel.plot_information()
+    # higherLevel.pupil_information_correlation_matrix()
+    # higherLevel.dataframe_evoked_correlation()
+    # higherLevel.plot_pupil_information_regression_evoked()
+        
     
     # not using
+    # higherLevel.rt_pupil_correlation()
     # higherLevel.partial_correlation_information()
     # higherLevel.plot_information_pe()         # plots the interaction between the frequency and accuracy
     # higherLevel.information_evoked_get_phasics()

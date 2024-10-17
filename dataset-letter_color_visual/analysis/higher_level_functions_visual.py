@@ -1122,7 +1122,7 @@ class higherLevel(object):
         print('success: information_theory_code_stimuli')   
     
 
-    def idt_model(self, df, df_data_column, elements, priors):
+    def idt_model(self, df, df_data_column, elements, priors, flat_prior=False):
         """Process Ideal Learner Model.
         
         Parameters
@@ -1182,15 +1182,17 @@ class higherLevel(object):
             
             # print(vector)
             if t < 1: # if it's the first trial, our expectations are based only on the prior (values)
-                # PRIORS BASED ON ODDBALL TASK
-                alpha1 = priors*len(elements) # np.sum(alpha) == len(elements), priors from odd-ball task
-                p1 = priors # priors based on odd-ball task, np.sum(priors) should equal 1
-                p = p1
                 
-                # # FLAT PRIORS
-                # alpha1 = np.ones(len(elements)) # np.sum(alpha) == len(elements), flat prior
-                # p1 = alpha1 / len(elements) # probablity, i.e., np.sum(p1) == 1
-                # p = p1
+                if not flat_prior:
+                    # PRIORS BASED ON ODDBALL TASK
+                    alpha1 = priors*len(elements) # np.sum(alpha) == len(elements), priors from odd-ball task
+                    p1 = priors # priors based on odd-ball task, np.sum(priors) should equal 1
+                    p = p1
+                else:
+                    # UNIFORM PRIOR DISTRIBUTION
+                    alpha1 = np.ones(len(elements)) # np.sum(alpha) == len(elements), flat prior
+                    p1 = alpha1 / len(elements) # probablity, i.e., np.sum(p1) == 1
+                    p = p1
             
             # at every trial, we compute surprise based on the probability
             model_P.append(p)           # probability (all elements)
@@ -1228,8 +1230,13 @@ class higherLevel(object):
         return [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D]
         
         
-    def information_theory_estimates(self, ):
+    def information_theory_estimates(self, flat_prior=False):
         """Run subject loop on Ideal Learner Model and save model estimates.
+        
+        Parameters
+        ----------
+        flat_prior : boolean
+            Use a uniform prior (True) or input priors from odd-ball task (False); default False
         
         Notes
         -----
@@ -1266,7 +1273,7 @@ class higherLevel(object):
             this_df = df_in[df_in['subject']==this_subj].copy()
             
             # the input to the model is the trial sequence = the order of letter-color pair for each participant
-            [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D] = self.idt_model(this_df, 'letter_color_pair', elements, this_priors)
+            [model_e, model_P, model_p, model_I, model_i, model_H, model_CH, model_D] = self.idt_model(this_df, 'letter_color_pair', elements, this_priors, flat_prior)
             
             # add to subject dataframe
             this_df['model_p'] = np.array(model_p)
@@ -1283,6 +1290,166 @@ class higherLevel(object):
         print('success: information_theory_estimates')
         
 
+    def average_information_conditions(self, ):
+        """Average the model parameters per subject per condition of interest. 
+
+        Notes
+        -----
+        Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
+        self.freq_cond argument determines how the trials were split
+        """     
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
+        DF.sort_values(by=['subject','trial_num'],inplace=True)
+        DF.reset_index()
+        
+        ############################
+        # drop outliers and missing trials
+        DF = DF[DF['drop_trial']==0]
+        ############################
+        
+        #interaction accuracy and frequency
+        for pupil_dv in ['model_i', 'model_H', 'model_D']: #interaction accuracy and frequency
+            
+            '''
+            ######## CORRECT x FREQUENCY ########
+            '''
+            # MEANS subject x bin x tone x congruent
+            DFOUT = DF.groupby(['subject','correct',self.freq_cond])[pupil_dv].mean()
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-frequency_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # FOR PLOTTING
+
+            # save for RMANOVA format
+            DFANOVA =  DFOUT.unstack([self.freq_cond,'correct',]) 
+            print(DFANOVA.columns)
+            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-frequency_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
+            '''
+            ######## CORRECT ########
+            '''
+            # MEANS subject x bin x tone x congruent
+            DFOUT = DF.groupby(['subject','correct'])[pupil_dv].mean()
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # FOR PLOTTING
+
+            # save for RMANOVA format
+            DFANOVA =  DFOUT.unstack(['correct',]) 
+            print(DFANOVA.columns)
+            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
+        
+        '''
+        ######## FREQUENCY ########
+        '''
+        for pupil_dv in ['model_i', 'model_H', 'model_D']: # mean accuracy
+            DFOUT = DF.groupby(['subject',self.freq_cond])[pupil_dv].mean()
+            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_frequency_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # For descriptives
+            # save for RMANOVA format
+            DFANOVA =  DFOUT.unstack([self.freq_cond]) 
+            print(DFANOVA.columns)
+            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
+            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
+        print('success: average_information_conditions')
+
+
+    def plot_information(self, ):
+        """Plot the model parameters across trials and average over subjects
+        Then, plot the model parameters by frequency
+
+        Notes
+        -----
+        1 figure, GROUP LEVEL DATA
+        x-axis is trials or frequency conditions.
+        Figure output as PDF in figure folder.
+        """
+        dvs = ['model_D', 'model_i','model_H']
+        ylabels = ['KL divergence', 'Surprise', 'Entropy', ]
+        xlabel = 'Trials'
+        colors = [ 'purple', 'teal', 'orange',]    
+        
+        fig = plt.figure(figsize=(4,4))
+        
+        subplot_counter = 1
+        # PLOT ACROSS TRIALS
+        for dvi, pupil_dv in enumerate(dvs):
+
+            ax = fig.add_subplot(3, 3, subplot_counter) # 1 subplot per bin windo
+            
+            DFIN = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+                        
+            subject_array = np.zeros((len(self.subjects), np.max(DFIN['trial_num'])+1))
+        
+            for s, subj in enumerate(self.subjects):
+                this_subj = int(''.join(filter(str.isdigit, subj)))
+                this_df = DFIN[DFIN['subject']==this_subj].copy()        
+                subject_array[s,:] = np.ravel(this_df[[pupil_dv]])
+                            
+            self.tsplot(ax, subject_array, color=colors[dvi], label=ylabels[dvi])
+    
+            # set figure parameters
+            ax.set_xlim([0, np.max(DFIN['trial_num'])+1])
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabels[dvi])
+            # ax.legend()
+            subplot_counter += 1
+        
+        # PLOT ACROSS FREQUENCY CONDITIONS
+        factor = self.freq_cond
+        xlabel = 'Letter-color frequency'
+        xticklabels = ['20%','40%','80%'] 
+        bar_width = 0.7
+        xind = np.arange(len(xticklabels))
+        
+        for dvi,pupil_dv in enumerate(dvs):
+            
+            ax = fig.add_subplot(3, 3, subplot_counter) # 1 subplot per bin window
+
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,'frequency',pupil_dv)), float_precision='%.16f')
+            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
+            
+            # Group average 
+            GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
+            GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
+            print(GROUP)
+            
+            # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+                       
+            # plot bar graph
+            for xi,x in enumerate(GROUP[factor]):
+                ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
+                
+            # individual points, repeated measures connected with lines
+            # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
+            # DFIN = DFIN.unstack(factor)
+            # for s in np.array(DFIN):
+            #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.1) # marker, line, black
+                
+            # set figure parameters
+            # ax.set_title(ylabels[dvi]) # repeat for consistent formatting
+            ax.set_ylabel(ylabels[dvi])
+            ax.set_xlabel(xlabel)
+            ax.set_xticks(xind)
+            ax.set_xticklabels(xticklabels)
+            if pupil_dv == 'model_D':
+                ax.set_ylim([0.004, 0.007])
+            if pupil_dv == 'model_i':
+                ax.set_ylim([4.9, 5.2])
+            if pupil_dv == 'model_H':
+                ax.set_ylim([4.5, 4.75])
+            # if pupil_dv == 'model_D':
+            #     ax.set_ylim([0.004, 0.00475])
+            # if pupil_dv == 'model_i':
+            #     ax.set_ylim([4.95, 5.05])
+            # if pupil_dv == 'model_H':
+            #     ax.set_ylim([4.85, 4.9])
+            subplot_counter += 1
+            
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_information.pdf'.format(self.exp)))
+        print('success: plot_information')
+        
+        
     def pupil_information_correlation_matrix(self,):
         """Correlate information variables to evaluate multicollinearity.
         
@@ -1571,158 +1738,48 @@ class higherLevel(object):
         print('success: plot_pupil_information_regression_evoked')
         
 
-    def average_information_conditions(self, ):
-        """Average the model parameters per subject per condition of interest. 
 
-        Notes
-        -----
-        Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
-        self.freq_cond argument determines how the trials were split
-        """     
-        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
-        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
-        DF.sort_values(by=['subject','trial_num'],inplace=True)
-        DF.reset_index()
-        
-        ############################
-        # drop outliers and missing trials
-        DF = DF[DF['drop_trial']==0]
-        ############################
-        
-        #interaction accuracy and frequency
-        for pupil_dv in ['model_i', 'model_H', 'model_D']: #interaction accuracy and frequency
-            
-            '''
-            ######## CORRECT x FREQUENCY ########
-            '''
-            # MEANS subject x bin x tone x congruent
-            DFOUT = DF.groupby(['subject','correct',self.freq_cond])[pupil_dv].mean()
-            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct-frequency_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # FOR PLOTTING
-
-            # save for RMANOVA format
-            DFANOVA =  DFOUT.unstack([self.freq_cond,'correct',]) 
-            print(DFANOVA.columns)
-            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct-frequency_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
-            '''
-            ######## CORRECT ########
-            '''
-            # MEANS subject x bin x tone x congruent
-            DFOUT = DF.groupby(['subject','correct'])[pupil_dv].mean()
-            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_correct_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # FOR PLOTTING
-
-            # save for RMANOVA format
-            DFANOVA =  DFOUT.unstack(['correct',]) 
-            print(DFANOVA.columns)
-            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_correct_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
-        
-        '''
-        ######## FREQUENCY ########
-        '''
-        for pupil_dv in ['model_i', 'model_H', 'model_D']: # mean accuracy
-            DFOUT = DF.groupby(['subject',self.freq_cond])[pupil_dv].mean()
-            DFOUT.to_csv(os.path.join(self.trial_bin_folder,'{}_frequency_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # For descriptives
-            # save for RMANOVA format
-            DFANOVA =  DFOUT.unstack([self.freq_cond]) 
-            print(DFANOVA.columns)
-            DFANOVA.columns = DFANOVA.columns.to_flat_index() # flatten column index
-            DFANOVA.to_csv(os.path.join(self.jasp_folder,'{}_frequency_{}_rmanova.csv'.format(self.exp,pupil_dv)), float_format='%.16f') # for stats
-        print('success: average_information_conditions')
-
-
-    def plot_information(self, ):
-        """Plot the model parameters across trials and average over subjects
-        Then, plot the model parameters by frequency
-
-        Notes
-        -----
-        1 figure, GROUP LEVEL DATA
-        x-axis is trials or frequency conditions.
-        Figure output as PDF in figure folder.
-        """
-        dvs = ['model_D', 'model_i','model_H']
-        ylabels = ['KL divergence', 'Surprise', 'Entropy', ]
-        xlabel = 'Trials'
-        colors = [ 'purple', 'teal', 'orange',]    
-        
-        fig = plt.figure(figsize=(4,4))
-        
-        subplot_counter = 1
-        # PLOT ACROSS TRIALS
-        for dvi, pupil_dv in enumerate(dvs):
-
-            ax = fig.add_subplot(3, 3, subplot_counter) # 1 subplot per bin windo
-            
-            DFIN = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
-            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
-                        
-            subject_array = np.zeros((len(self.subjects), np.max(DFIN['trial_num'])+1))
-        
-            for s, subj in enumerate(self.subjects):
-                this_subj = int(''.join(filter(str.isdigit, subj)))
-                this_df = DFIN[DFIN['subject']==this_subj].copy()        
-                subject_array[s,:] = np.ravel(this_df[[pupil_dv]])
-                            
-            self.tsplot(ax, subject_array, color=colors[dvi], label=ylabels[dvi])
-    
-            # set figure parameters
-            ax.set_xlim([0, np.max(DFIN['trial_num'])+1])
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabels[dvi])
-            # ax.legend()
-            subplot_counter += 1
-        
-        # PLOT ACROSS FREQUENCY CONDITIONS
-        factor = self.freq_cond
-        xlabel = 'Letter-color frequency'
-        xticklabels = ['20%','40%','80%'] 
-        bar_width = 0.7
-        xind = np.arange(len(xticklabels))
-        
-        for dvi,pupil_dv in enumerate(dvs):
-            
-            ax = fig.add_subplot(3, 3, subplot_counter) # 1 subplot per bin window
-
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,'frequency',pupil_dv)), float_precision='%.16f')
-            DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
-            
-            # Group average 
-            GROUP = pd.DataFrame(DFIN.groupby([factor])[pupil_dv].agg(['mean','std']).reset_index())
-            GROUP['sem'] = np.true_divide(GROUP['std'],np.sqrt(len(self.subjects)))
-            print(GROUP)
-            
-            # ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
-                       
-            # plot bar graph
-            for xi,x in enumerate(GROUP[factor]):
-                ax.bar(xind[xi],np.array(GROUP['mean'][xi]), width=bar_width, yerr=np.array(GROUP['sem'][xi]), capsize=3, color=colors[dvi], edgecolor='black', ecolor='black')
-                
-            # individual points, repeated measures connected with lines
-            # DFIN = DFIN.groupby(['subject',factor])[pupil_dv].mean() # hack for unstacking to work
-            # DFIN = DFIN.unstack(factor)
-            # for s in np.array(DFIN):
-            #     ax.plot(xind, s, linestyle='-', marker='o', markersize=3, fillstyle='full', color='black', alpha=.1) # marker, line, black
-                
-            # set figure parameters
-            # ax.set_title(ylabels[dvi]) # repeat for consistent formatting
-            ax.set_ylabel(ylabels[dvi])
-            ax.set_xlabel(xlabel)
-            ax.set_xticks(xind)
-            ax.set_xticklabels(xticklabels)
-            if pupil_dv == 'model_D':
-                ax.set_ylim([0.004, 0.007])
-            if pupil_dv == 'model_i':
-                ax.set_ylim([4.9, 5.2])
-            if pupil_dv == 'model_H':
-                ax.set_ylim([4.5, 4.75])
-            subplot_counter += 1
-            
-        # whole figure format
-        sns.despine(offset=10, trim=True)
-        plt.tight_layout()
-        fig.savefig(os.path.join(self.figure_folder,'{}_information.pdf'.format(self.exp)))
-        print('success: plot_information')
+    # def rt_pupil_correlation(self,):
+    #     """Correlate the RTs with the post-feedback pupil response in the early time window across participants.
+    #
+    #     Notes
+    #     -----
+    #     Outputs a dataframe to enter into JASP
+    #     """
+    #     dvs = ['pupil_feed_locked_t1', 'pupil_feed_locked_t2', 'pupil_baseline_feed_locked']
+    #
+    #     df_in = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)))
+    #     df_out = pd.DataFrame()
+    #     df_out['subject'] = self.subjects
+    #     ############################
+    #     # drop outliers and missing trials
+    #     df_in = df_in[df_in['drop_trial']==0]
+    #
+    #     ############################
+    #
+    #     for correct in [0,1]:
+    #         # loop pupil dvs
+    #         for sp,pupil_dv in enumerate(dvs):
+    #
+    #            save_coeff = []
+    #            # loop subjects
+    #            for s,subj in enumerate(self.subjects):
+    #
+    #                this_subj = int(''.join(filter(str.isdigit, subj))) # get number of subject only
+    #
+    #                this_df = df_in[df_in['subject'] == this_subj].copy()
+    #                this_df = this_df[this_df['correct']==correct].copy()
+    #
+    #                x = np.array(this_df['RT'])
+    #                y = np.array(this_df[pupil_dv])
+    #                # all subjects
+    #                r,pval = stats.spearmanr(x,y)
+    #
+    #                save_coeff.append(r)
+    #
+    #            df_out[pupil_dv + '_correct{}'.format(correct)] = np.array(save_coeff)
+    #     df_out.to_csv(os.path.join(self.jasp_folder,'{}_rt_pupil_correlations.csv'.format(self.exp)))
+    #     print('success: rt_pupil_correlation')
         
 
     # def plot_information_frequency(self,):

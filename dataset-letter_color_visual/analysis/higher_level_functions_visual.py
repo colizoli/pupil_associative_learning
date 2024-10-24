@@ -1547,15 +1547,16 @@ class higherLevel(object):
         ivs = ['model_i', 'model_H', 'model_D']
 
         pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
-        df_out = pd.DataFrame() # timepoints x subjects
 
         for t,time_locked in enumerate(self.time_locked):
 
             for cond in ['correct', 'error', 'all_trials']:
-
+                                
                 # Loop through IVs
                 for i,iv in enumerate(ivs):
-
+                    
+                    df_out = pd.DataFrame() # timepoints x subjects
+                    
                     # loop subjects
                     for s, subj in enumerate(self.subjects):
 

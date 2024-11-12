@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from lmfit import minimize, Parameters, Parameter, report_fit
 from fir import FIRDeconvolution
 import glm_functions_visual as glm_functions # for nuisance regression
-from IPython import embed as shell # for debugging
+# from IPython import embed as shell # for debugging
 
 
 """ Plotting Format"""
@@ -1027,7 +1027,7 @@ class trials(object):
         The downsample factor is the sample rate divided by the downsample rate (helps with plotting)
     """
     
-    def __init__(self,subject, edf, project_directory,sample_rate,phases,time_locked,pupil_step_lim,baseline_window):
+    def __init__(self,subject, edf, project_directory, sample_rate, phases, time_locked, pupil_step_lim, baseline_window):
         """Constructor method"""
         self.subject = subject
         self.alias = edf
@@ -1049,7 +1049,7 @@ class trials(object):
             os.mkdir(self.figure_folder)
     
     
-    def event_related_subjects(self,pupil_dv):
+    def event_related_subjects(self, pupil_dv):
         """Cut out time series of pupil data locked to time points of interest within the given kernel.
             
         Parameters

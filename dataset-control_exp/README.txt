@@ -1,4 +1,4 @@
-# Pupil dilation offers a time-window on prediction error
+Pupil dilation offers a time-window on prediction error
 Olympia Colizoli, Tessa van Leeuwen, Danaja Rutar, Harold Bekkering
 bioRxiv 2024.10.31.621279; doi: https://doi.org/10.1101/2024.10.31.621279
 

@@ -10,6 +10,7 @@ Python 3.6
 
 Notes
 -----
+To install the deconvolution package:
 >>> pip install fir
 ================================================
 """

@@ -46,7 +46,7 @@ else:
 # -----------------------
 # Participants
 # -----------------------
-ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants.csv'))
+ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants_control_exp.csv'))
 subjects = ['sub-{}'.format(s) for s in ppns['subject']]
 
 # -----------------------
@@ -156,11 +156,11 @@ if higher_level:
         pupil_step_lim          = pupil_step_lim,                
         baseline_window         = baseline_window,              
         pupil_time_of_interest  = pupil_time_of_interest, # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
-        colors                  = colors   # determines how to group the conditions
+        colors                  = colors                  # determines how to group the conditions
         )
-    higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
-    higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
-    higherLevel.average_conditions_colors()           # averages dvs in conditions of interest
+    higherLevel.higherlevel_get_phasics()               # compute phasic pupil in time window of interest
+    higherLevel.create_subjects_dataframe()             # creates a single large dataframe all subjects
+    higherLevel.average_conditions_colors()             # averages dvs in conditions of interest
     higherLevel.dataframe_evoked_pupil_higher_colors()  # averages evoked pupil responses by conditions of interest
     higherLevel.plot_evoked_pupil_higher_colors()       # averages evoked pupil responses by conditions of interest
     
@@ -176,9 +176,9 @@ if higher_level:
         pupil_time_of_interest  = pupil_time_of_interest, # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil
         colors                  = colors                  # determines how to group the conditions
         )
-    higherLevel.higherlevel_get_phasics()             # compute phasic pupil in time window of interest
-    higherLevel.create_subjects_dataframe()           # creates a single large dataframe all subjects
-    higherLevel.average_conditions_sounds()           # averages dvs in conditions of interest
+    higherLevel.higherlevel_get_phasics()               # compute phasic pupil in time window of interest
+    higherLevel.create_subjects_dataframe()             # creates a single large dataframe all subjects
+    higherLevel.average_conditions_sounds()             # averages dvs in conditions of interest
     higherLevel.dataframe_evoked_pupil_higher_sounds()  # averages evoked pupil responses by conditions of interest
     higherLevel.plot_evoked_pupil_higher_sounds()       # averages evoked pupil responses by conditions of interest
         

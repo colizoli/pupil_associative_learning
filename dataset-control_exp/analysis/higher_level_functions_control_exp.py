@@ -111,6 +111,8 @@ class higherLevel(object):
         List of arrays indicating the size of pupil trial kernels in seconds with respect to first event, first element should max = 0! (e.g., [[-baseline_window,3],[-baseline_window,3]] )
     baseline_window : float
         Number of seconds before each event in self.time_locked that are averaged for baseline correction
+    pupil_time_of_interest : list
+        List of arrays indicating the time windows in seconds in which to average evoked responses, per event in self.time_locked, see in higher.plot_evoked_pupil (e.g., [[1.0,2.0],[1.0,2.0]])
     """
     
     def __init__(self, subjects, experiment_name, project_directory, sample_rate, time_locked, pupil_step_lim, baseline_window, pupil_time_of_interest, colors):        

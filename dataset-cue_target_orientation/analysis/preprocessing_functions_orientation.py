@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 from lmfit import minimize, Parameters
 from fir import FIRDeconvolution
 import mne
-import glm_functions_prediction as glm_functions
+import glm_functions_orientation as glm_functions
 from IPython import embed as shell # used for debugging
 
 
@@ -122,7 +122,13 @@ class pupilPreprocess(object):
        
     
     def housekeeping(self, experiment_name):
-        # Replace 'prediction' with new experiment_name.
+        """Replace 'prediction' with new experiment_name.
+        
+        Parameters
+        ----------
+        experiment_name : string
+            New experiment name to use.
+        """
 
         # RENAME
         files = os.listdir(self.project_directory)

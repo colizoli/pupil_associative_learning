@@ -122,46 +122,34 @@ if higher_level:
         baseline_window         = baseline_window,              
         pupil_time_of_interest  = [[[0.75, 1.25], [2.5, 3.0]]] # time windows to average phasic pupil, per event, in higher.plot_evoked_pupil     
         )
-
-    # higherLevel.higherlevel_log_conditions()     # computes mappings, accuracy, and missing trials
-    # higherLevel.higherlevel_get_phasics()        # computes phasic pupil for each subject (adds to log files)
-    # higherLevel.create_subjects_dataframe()      # adds baseline pupil, combines all subjects' behavioral files: task-predictions_subjects.csv, flags outliers, drops phase 2 trials
+    ''' Make subjects dataframe
+    '''
+    higherLevel.higherlevel_log_conditions()     # computes mappings, accuracy, and missing trials
+    higherLevel.higherlevel_get_phasics()        # computes phasic pupil for each subject (adds to log files)
+    higherLevel.create_subjects_dataframe()      # adds baseline pupil, combines all subjects' behavioral files into one large data frame, flags outliers, drops phase 2 trials
     ''' Note: the functions after this are using: task-cue_target_orientation_subjects.csv
     '''
-    ''' DV averages within bin windows
-    '''
-    # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
-    # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
-    # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
-    # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
+    higherLevel.average_conditions()           # group level data frames for DVs (except evoked response), main effects and interactions
+    higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy on pupil DV
+    higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
+    higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
     
     ''' Evoked pupil response
     '''
-    # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
     
     ''' Ideal learner model
     '''
-    # higherLevel.information_theory_estimates()
-    # higherLevel.average_information_conditions()
-    # higherLevel.plot_information()
-    
+    higherLevel.information_theory_estimates()   # compute the Shannon surprise, entropy, and KL divergence per trial for each subject, add to subjects' dataframe
+    higherLevel.average_information_conditions() # average model parameters across conditions of interest
+    higherLevel.plot_information()               # plot the model parameters as a function of task conditions
+
     ''' Model fits
     '''
-    # higherLevel.pupil_information_correlation_matrix()
-    # higherLevel.dataframe_evoked_correlation()
-    # higherLevel.plot_pupil_information_regression_evoked()
-    # higherLevel.plot_phasic_pupil_information_scatter()
-    
-    ''' Supplementary analyses
-    '''
-
-    # not using
-    # higherLevel.rt_pupil_correlation()
-    # higherLevel.information_evoked_get_phasics()
-    # higherLevel.plot_information_phasics()
-    # higherLevel.plot_information_phasics_accuracy_split()
-    # higherLevel.plot_information_pe()         # plots the interaction between the frequency and accuracy of the model parameters
+    higherLevel.pupil_information_correlation_matrix()      # plot the correlation between the model parameters
+    higherLevel.dataframe_evoked_correlation()              # compute the correlation of pupil to model parameters for each timepoint of evoked response
+    higherLevel.plot_pupil_information_regression_evoked()  # plot the correlation between pupil to model parameters for each timepoint of evoked response
     
     
     

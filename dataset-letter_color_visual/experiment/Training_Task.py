@@ -1,7 +1,13 @@
 """
-Training task, gradient prediction errors
+Pupil dilation offers a time-window on prediction error
+Olympia Colizoli, Tessa van Leeuwen, Danaja Rutar, Harold Bekkering
+bioRxiv 2024.10.31.621279; doi: https://doi.org/10.1101/2024.10.31.621279
+
+-- Dataset #2: Letter-color 2AFC task administer experiment to participants --
+
+TRAINING task (Odd-ball detection task)
 """
-# data saved in ~/source/sub-XXX
+# data saved in ~/LogFiles/sub-XXX
 
 
 # Import necessary modules
@@ -11,7 +17,7 @@ import numpy as np
 import pandas as pd
 import os, time  # for paths and data
 import gpe_params as p
-# from IPython import embed as shell
+from IPython import embed as shell
 
 debug_mode = False
 
@@ -42,7 +48,7 @@ subject_ID = int(g.data[0])
 
 ## Create LogFile folder cwd/LogFiles
 cwd = os.getcwd()
-logfile_dir = os.path.join(cwd,'source','sub-{}'.format(subject_ID)) 
+logfile_dir = os.path.join(cwd,'LogFiles','sub-{}'.format(subject_ID)) 
 if not os.path.isdir(logfile_dir):
     os.makedirs(logfile_dir)
 
@@ -84,7 +90,7 @@ if subject_ID:
         
     ## output file name with time stamp prevents any overwriting of data
     timestr = time.strftime("%Y%m%d-%H%M%S") 
-    output_filename = os.path.join(logfile_dir,'sub-{}_task-letter_color_visual_training_beh_{}.csv'.format(subject_ID,timestr ))
+    output_filename = os.path.join(logfile_dir,'sub-{}_task-training_events_{}.csv'.format(subject_ID,timestr ))
     # output dataframe
     cols = ['subject','trial_num','letter','frequency','r','g','b','ITI','oddball','button','correct','RT']
     DF = pd.DataFrame(columns=cols)

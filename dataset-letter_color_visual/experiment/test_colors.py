@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import os, time  # for paths and data
 import gpe_params as p
-# from IPython import embed as shell # for debugging only
+from IPython import embed as shell
 
 debug_mode = True
 

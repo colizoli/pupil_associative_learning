@@ -1,5 +1,11 @@
 """
-PRACTICE Training task, gradient prediction errors
+Pupil dilation offers a time-window on prediction error
+Olympia Colizoli, Tessa van Leeuwen, Danaja Rutar, Harold Bekkering
+bioRxiv 2024.10.31.621279; doi: https://doi.org/10.1101/2024.10.31.621279
+
+-- Dataset #2: Letter-color 2AFC task administer experiment to participants --
+
+PRACTICE Training task (Odd-ball detection task)
 """
 # data saved in ~/LogFiles/sub-XXX
 # only colors saved, not responses
@@ -11,7 +17,7 @@ import numpy as np
 import pandas as pd
 import os, time  # for paths and data
 import gpe_params as p
-# from IPython import embed as shell
+from IPython import embed as shell
 
 debug_mode = False
 

@@ -12,7 +12,7 @@ import pylink, numpy, os, time
 from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy # this file needs to be in experiment directory
 from psychopy import visual, core, event, monitors
 from PIL import Image
-# from IPython import embed as shell # only for debugging
+from IPython import embed as shell
 
 global tk,dataFileName,dataFolder
 tk = None
@@ -27,7 +27,7 @@ def config(subject_ID,task):
     # Note that the file name cannot exceeds 8 characters
     # please open eyelink data files early to record as much info as possible
     cwd = os.getcwd()
-    dataFolder = os.path.join(cwd,'source','sub-{}'.format(subject_ID)) 
+    dataFolder = os.path.join(cwd,'LogFiles','sub-{}'.format(subject_ID)) 
     if not os.path.exists(dataFolder): os.makedirs(dataFolder)
     print subject_ID
     print task
@@ -126,9 +126,8 @@ def stop_recording(timestr):
     tk.closeDataFile()
     pylink.pumpDelay(50)
     # rename file upon transfer
-    original_name = os.path.splitext(dataFileName) # str(subject_ID)+".EDF"
-    # sub-xxx_task-letter_color_visual_decision_recording-eyetracking_physio_timestring.EDF
-    new_name = 'sub-'+ original_name[0] +'_task-letter_color_visual_decision_recording-eyetracking_physio_' + timestr + original_name[1]  
+    original_name = os.path.splitext(dataFileName)
+    new_name = 'sub-'+ original_name[0] +'_task-decision_eye_' + timestr + original_name[1] # sub-xxx_task-decision_eye_timestring.EDF 
     tk.receiveDataFile(dataFileName, os.path.join(dataFolder, new_name))
     print('EDF file successfully transferred {}'.format(new_name))
     #close the link to the tracker, graphics

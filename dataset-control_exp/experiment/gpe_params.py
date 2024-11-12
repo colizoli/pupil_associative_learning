@@ -1,5 +1,5 @@
 """
-PARAMETERS Pupil dilation offers a time-window on prediction erros
+PARAMETERS Gradient prediction errors
 """
 
 # Screen-specific parameters lab B.00.80A

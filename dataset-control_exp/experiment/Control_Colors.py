@@ -12,7 +12,7 @@ import random
 import numpy as np
 import pandas as pd
 import os, time  # for paths and data
-# from IPython import embed as shell # for debugging only
+from IPython import embed as shell
 import gpe_params as p
 
 debug_mode = False
@@ -28,12 +28,12 @@ if subject_ID:
 
     ## Create LogFile folder cwd/LogFiles
     cwd = os.getcwd()
-    logfile_dir = os.path.join(cwd,'source','sub-{}'.format(subject_ID)) 
+    logfile_dir = os.path.join(cwd,'LogFiles','sub-{}'.format(subject_ID)) 
     if not os.path.isdir(logfile_dir):
         os.makedirs(logfile_dir)
     
     ## Get meanRT for setting stim duration
-    DFRT = pd.read_csv(os.path.join('stimuli','sub-{}_task-letter_color_visual_decision_meanRT.csv'.format(subject_ID-100)))
+    DFRT = pd.read_csv(os.path.join('stimuli','sub-{}_task-decision_meanRT.csv'.format(subject_ID-100)))
         
     ### PARAMETERS ###
     # Timing
@@ -48,7 +48,7 @@ if subject_ID:
         
     ## output file name with time stamp prevents any overwriting of data
     timestr = time.strftime("%Y%m%d-%H%M%S") 
-    output_filename = os.path.join(logfile_dir,'sub-{}_task-control_exp_colors_beh_{}.csv'.format(subject_ID, timestr))
+    output_filename = os.path.join(logfile_dir,'sub-{}_task-colors_events_{}.csv'.format(subject_ID,timestr ))
     cols = ['subject','trial_num','r','g','b','RT','ITI']
     DF = pd.DataFrame(columns=cols)
         
@@ -64,6 +64,7 @@ if subject_ID:
     \nWhen you see a color, press the Right-ALT key as fast as possible.\
     \nBlink as you normally would.\
     \n\n<Press any button to BEGIN>"
+    
     
     stim_instr  = visual.TextStim(win, color='black', pos=(0.0, 0.0), wrapWidth=p.ww) 
     stim_fix    = visual.TextStim(win, text='+',color='black', pos=(0.0, 0.0), height=p.fh)

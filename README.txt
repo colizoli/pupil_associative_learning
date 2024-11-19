@@ -1,5 +1,5 @@
 Manuscript Name: Pupil dilation offers a time-window on prediction error
-Published: bioRxiv 2024.10.31.621279; doi: https://doi.org/10.1101/2024.10.31.621279
+Published: bioRxiv 2024.10.31.621279; doi: ttps://doi.org/10.1101/2024.10.31.621279
 
 v1, 12 Nov 2024
 Authors: Olympia Colizoli, Tessa van Leeuwen, Danaja Rutar, Harold Bekkering

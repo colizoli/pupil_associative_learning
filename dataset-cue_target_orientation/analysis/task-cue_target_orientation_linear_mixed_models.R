@@ -31,7 +31,7 @@ warmups = 5000
 nchains = 4
 
 # set current working directory and load data 
-setwd("~/Library/CloudStorage/OneDrive-RadboudUniversiteit/WORK/PROJECTS/Gradient_Prediction_Errors/gpe_data/DSC/dataset-cue_target_orientation/derivatives/data_frames")
+setwd("~dataset-cue_target_orientation/derivatives/data_frames")
 df <- read_csv("task-cue_target_orientation_subjects.csv")
 df <- df[df$outlier_rt != 1, ] # drop the "flagged" trials
 View(df)

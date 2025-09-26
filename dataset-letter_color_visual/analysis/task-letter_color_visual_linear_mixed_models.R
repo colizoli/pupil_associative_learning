@@ -31,7 +31,7 @@ warmups = 5000
 nchains = 4
 
 # set current working directory and load data 
-setwd("~/Library/CloudStorage/OneDrive-RadboudUniversiteit/WORK/PROJECTS/Gradient_Prediction_Errors/gpe_data/DSC/dataset-letter_color_visual/derivatives/data_frames")
+setwd("~dataset-letter_color_visual/derivatives/data_frames")
 df <- read_csv("task-letter_color_visual_decision_subjects.csv")
 df <- df[df$drop_trial != 1, ] # drop the "flagged" trials
 View(df)

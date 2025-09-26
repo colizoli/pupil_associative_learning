@@ -360,6 +360,37 @@ class higherLevel(object):
         #####################
         print('success: create_subjects_dataframe')
         
+    
+    def get_stimulus_durations(self, ):
+        """Get the color stimulus duration per participant and compute group mean.
+        
+        Notes
+        -----
+        Output in dataframe folder
+        """
+        durations = []
+        
+        # loop through subjects, get behavioral log files
+        for s,subj in enumerate(self.subjects):
+            
+            subj_num = re.findall(r'\d+', subj)[0]
+            this_data = pd.read_csv(os.path.join(self.project_directory, subj, 'beh', 'sub-{}_task-decision_meanRT.csv'.format(int(subj_num)-100)))
+            this_data = this_data.loc[:, ~this_data.columns.str.contains('^Unnamed')] # remove all unnamed columns
+            
+            ###############################            
+            # concatenate all subjects
+            durations.append(this_data.meanRT[0])
+        
+        print('Across participants Mean stimulus duration = {} s, SD = {}'.format(np.mean(durations), np.std(durations)))
+        #####################
+        # save whole dataframe with all subjects
+        DF = pd.DataFrame()
+        DF['subject'] = self.subjects
+        DF['stim_duration'] = durations
+        DF.to_csv(os.path.join(self.dataframe_folder,'{}_stimulus_durations.csv'.format(self.exp)))
+        #####################
+        print('success: get_stimulus_durations')
+        
         
     def average_conditions_colors(self, ):
         """Average the DVs per subject per condition of interest. 
@@ -501,17 +532,22 @@ class higherLevel(object):
             tw_begin = int(event_onset + (twi[0]*self.sample_rate))
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+            
+        # Shade average color stimulus duration (0.7 s)
+        fb_begin = int(event_onset)
+        fb_end = int(event_onset + (0.7*self.sample_rate))
+        ax.axvspan(fb_begin,fb_end, facecolor='k', alpha=0.3)
         
         # shade baseline pupil
-        twb = [-self.baseline_window, 0]
-        baseline_onset = int(abs(twb[0]*self.sample_rate))
-        twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
-        twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
-        ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
+        # twb = [-self.baseline_window, 0]
+        # baseline_onset = int(abs(twb[0]*self.sample_rate))
+        # twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
+        # twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
+        # ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, event_onset+(500*1), event_onset+(500*2), event_onset+(500*3), event_onset+(500*4), event_onset+(500*5), event_onset+(500*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
         # ax.set_ylim(ylim)
         # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from stimulus (s)')
@@ -566,10 +602,15 @@ class higherLevel(object):
             tw_begin = int(event_onset + (twi[0]*self.sample_rate))
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+        
+        # Shade average color stimulus duration (0.7 s)
+        fb_begin = int(event_onset)
+        fb_end = int(event_onset + (0.7*self.sample_rate))
+        ax.axvspan(fb_begin,fb_end, facecolor='k', alpha=0.3)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, event_onset+(500*1), event_onset+(500*2), event_onset+(500*3), event_onset+(500*4), event_onset+(500*5), event_onset+(500*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
         # ax.set_ylim(ylim)
         # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from stimulus (s)')
@@ -704,7 +745,7 @@ class higherLevel(object):
         TS = np.array(COND.iloc[:,-kernel:]) # index from back to avoid extra unnamed column pandas
         self.tsplot(ax, TS, color='k', label=xticklabels[i])
         self.cluster_sig_bar_1samp(array=TS, x=pd.Series(range(TS.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
-    
+        
         # set figure parameters
         ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
@@ -715,16 +756,21 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
         
+        # Shade aduitory feedback duration (0.3 s)
+        fb_begin = int(event_onset)
+        fb_end = int(event_onset + (0.3*self.sample_rate))
+        ax.axvspan(fb_begin,fb_end, facecolor='k', alpha=0.3)
+        
         # shade baseline pupil
-        twb = [-self.baseline_window, 0]
-        baseline_onset = int(abs(twb[0]*self.sample_rate))
-        twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
-        twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
-        ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
+        # twb = [-self.baseline_window, 0]
+        # baseline_onset = int(abs(twb[0]*self.sample_rate))
+        # twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
+        # twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
+        # ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, event_onset+(500*1), event_onset+(500*2), event_onset+(500*3), event_onset+(500*4), event_onset+(500*5), event_onset+(500*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0, np.true_divide(self.pupil_step_lim[t][1],2), self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
         # ax.set_ylim(ylim)
         # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from stimulus (s)')
@@ -773,10 +819,11 @@ class higherLevel(object):
             self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=0.2, alpha_line=1)
             save_conds.append(TS)
         
-        # stats      
+        # stats (plot corrected and uncorrected) 
         cond_diff = save_conds[0]-save_conds[1]  
         self.cluster_sig_bar_1samp(array=cond_diff, x=pd.Series(range(cond_diff.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
-
+        self.cluster_sig_bar_1samp(array=cond_diff, x=pd.Series(range(cond_diff.shape[-1])), yloc=1, color='purple', ax=ax, threshold=0.05, nrand=5000, cluster_correct=False)
+        
         # set figure parameters
         ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
@@ -786,10 +833,15 @@ class higherLevel(object):
             tw_begin = int(event_onset + (twi[0]*self.sample_rate))
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+        
+        # shade duration of auditory stimulus (0.3 s)
+        fb_begin = int(event_onset)
+        fb_end = int(event_onset + (0.3*self.sample_rate))
+        ax.axvspan(fb_begin,fb_end, facecolor='k', alpha=0.3)
 
-        xticks = [event_onset,mid_point,end_sample]
+        xticks = [event_onset, event_onset+(500*1), event_onset+(500*2), event_onset+(500*3), event_onset+(500*4), event_onset+(500*5), event_onset+(500*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0,np.true_divide(self.pupil_step_lim[t][1],2),self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
         # ax.set_ylim(ylim)
         # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from stimulus (s)')

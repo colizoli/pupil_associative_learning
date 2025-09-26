@@ -60,6 +60,7 @@ colors_rgb = [
     [  0, 168, 107],
     [157, 193, 131]
        ]
+       
 colors = [
     '#037970',
     '#4B7C59',
@@ -160,6 +161,7 @@ if higher_level:
         )
     higherLevel.higherlevel_get_phasics()               # compute phasic pupil in time window of interest
     higherLevel.create_subjects_dataframe()             # creates a single large dataframe all subjects
+    higherLevel.get_stimulus_durations()                  # get the color stimulus duration per participant and group mean
     higherLevel.average_conditions_colors()             # averages dvs in conditions of interest
     higherLevel.dataframe_evoked_pupil_higher_colors()  # averages evoked pupil responses by conditions of interest
     higherLevel.plot_evoked_pupil_higher_colors()       # averages evoked pupil responses by conditions of interest

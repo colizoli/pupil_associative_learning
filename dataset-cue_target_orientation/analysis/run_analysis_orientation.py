@@ -47,6 +47,10 @@ else:
 # Participants
 # -----------------------
 ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants_orientation.csv'))
+''' To run the conservative pipeline, make sure to change participants.csv to 'participants_orientation_conservative.csv'
+ppns     = pd.read_csv(os.path.join(home_dir, 'analysis', 'participants_orientation_conservative.csv')) # sanity check
+'''
+
 subjects = ['sub-{}'.format(s) for s in ppns['subject']]
 group    = ppns['normal_order']
 
@@ -85,7 +89,39 @@ if pre_process:
         pupilPreprocess.housekeeping(experiment_name)   # rename files
         pupilPreprocess.read_trials()                   # change read_trials for different message strings
         pupilPreprocess.preprocess_pupil()              # blink interpolation, filtering, remove blinks/saccades, percent signal change, plots output
-
+    
+    # need to reset object initialization to prevent interfence between preprocessing pipelines
+    for s,subj in enumerate(subjects):
+        edf = '{}_{}_recording-eyetracking_physio'.format(subj, experiment_name)
+        # initialize class
+        pupilPreprocess = pupil_preprocessing.pupilPreprocess(
+            subject             = subj,
+            edf                 = edf,
+            project_directory   = data_dir,
+            sample_rate         = sample_rate,
+            tw_blinks           = tw_blinks,
+            mph                 = mph,
+            mpd                 = mpd,
+            threshold           = threshold
+            )
+        pupilPreprocess.preprocess_pupil_raw_bp()       # filtering, percent signal change, plots output
+        
+    # need to reset object initialization to prevent interfence between preprocessing pipelines
+    for s,subj in enumerate(subjects):
+        edf = '{}_{}_recording-eyetracking_physio'.format(subj, experiment_name)
+        # initialize class
+        pupilPreprocess = pupil_preprocessing.pupilPreprocess(
+            subject             = subj,
+            edf                 = edf,
+            project_directory   = data_dir,
+            sample_rate         = sample_rate,
+            tw_blinks           = tw_blinks,
+            mph                 = mph,
+            mpd                 = mpd,
+            threshold           = threshold
+            )
+        pupilPreprocess.preprocess_pupil_interp_bp()    # blink interpolation, filtering, percent signal change, plots output
+        
 # -----------------------
 # Pupil evoked responses, all trials
 # -----------------------      
@@ -106,6 +142,12 @@ if trial_process:
             )
         trialLevel.event_related_subjects(pupil_dv='pupil_psc')  # psc: percent signal change, per event of interest, 1 output for all trials+subjects
         trialLevel.event_related_baseline_correction()           # per event of interest, baseline corrrects evoked responses
+        trialLevel.event_related_subjects_raw_bp(pupil_dv='pupil_psc')  # psc: percent signal change, per event of interest, 1 output for all trials+subjects
+        trialLevel.event_related_baseline_correction_raw_bp()           # per event of interest, baseline corrrects evoked responses
+        trialLevel.event_related_subjects_interp_bp(pupil_dv='pupil_psc')  # psc: percent signal change, per event of interest, 1 output for all trials+subjects
+        trialLevel.event_related_baseline_correction_interp_bp()           # per event of interest, baseline corrrects evoked responses
+        trialLevel.event_related_subjects_nuisance(pupil_dv='pupil_nuisance_psc')  # psc: percent signal change, per event of interest, 1 output for all trials+subjects
+        trialLevel.event_related_baseline_correction_nuisance()           # per event of interest, baseline corrrects evoked responses
 
 # -----------------------
 # Behavior and responses, GROUP-level statistics
@@ -124,9 +166,15 @@ if higher_level:
         )
     ''' Make subjects dataframe
     '''
+    higherLevel.compute_blink_percentages()      # computes the amount of interpolated data per trial and excludes based on threshold
     higherLevel.higherlevel_log_conditions()     # computes mappings, accuracy, and missing trials
     higherLevel.higherlevel_get_phasics()        # computes phasic pupil for each subject (adds to log files)
-    higherLevel.create_subjects_dataframe()      # adds baseline pupil, combines all subjects' behavioral files into one large data frame, flags outliers, drops phase 2 trials
+    higherLevel.create_subjects_dataframe(exclude_interp=0) # adds baseline pupil, combines all subjects' behavioral files into one large data frame, flags outliers, drops phase 2 trials
+
+    ''' To run the conservative pipeline, make sure to also change participants.csv to 'participants_orientation_conservative.csv'
+    higherLevel.create_subjects_dataframe(exclude_interp=1)      # adds baseline pupil, combines all subjects' behavioral files into one large data frame, flags outliers, drops phase 2 trials
+    
+    '''
     ''' Note: the functions after this are using: task-cue_target_orientation_subjects.csv
     '''
     higherLevel.average_conditions()           # group level data frames for DVs (except evoked response), main effects and interactions
@@ -145,13 +193,22 @@ if higher_level:
     higherLevel.average_information_conditions() # average model parameters across conditions of interest
     higherLevel.plot_information()               # plot the model parameters as a function of task conditions
 
-    ''' Model fits
+    ''' Ideal learner model fits
     '''
     higherLevel.pupil_information_correlation_matrix()      # plot the correlation between the model parameters
     higherLevel.dataframe_evoked_correlation()              # compute the correlation of pupil to model parameters for each timepoint of evoked response
     higherLevel.plot_pupil_information_regression_evoked()  # plot the correlation between pupil to model parameters for each timepoint of evoked response
     
-    
-    
+    ''' Sanity checks on pupil pre-processing
+    '''
+    higherLevel.dataframe_evoked_pupil_higher_raw_bp()      # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    higherLevel.dataframe_evoked_pupil_higher_interp_bp()   # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    higherLevel.dataframe_evoked_pupil_higher_nuisance()    # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    higherLevel.plot_evoked_pupil_raw_bp()                  # plots evoked pupil per event of interest, group level, main effects + interaction
+    higherLevel.plot_evoked_pupil_interp_bp()               # plots evoked pupil per event of interest, group level, main effects + interaction
+    higherLevel.plot_evoked_pupil_nuisance()                # plots evoked pupil per event of interest, group level, main effects + interaction
+    higherLevel.compute_phasics_interp_bp()                 # compute the average feedback response in the time windows of interest (INTERP BP timeseries)
+    higherLevel.correlation_interp_clean()                  # check the correlation in the phasic pupil averages between the clean and "unclean" data
+    higherLevel.group_r2_deconvolution()                    # average r2 from preprocessing deconvolution
     
     

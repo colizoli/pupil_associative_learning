@@ -26,7 +26,7 @@ import scipy.stats as stats
 import statsmodels.api as sm
 
 from copy import deepcopy
-# from IPython import embed as shell # used for debugging
+from IPython import embed as shell # used for debugging
 
 pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
 
@@ -292,8 +292,70 @@ class higherLevel(object):
             Array of shape r with normalized coefficients.
         """
         return 0.5*np.log((1+r)/(1-r))
+    
+       
+    def compute_blink_percentages(self, thresh = 0.40):
+        """Computes the percentage of interpolated data per trial and marks trials to be excluded based on treshold
         
+        Notes
+        -----
+        Overwrites original log file (this_log).
+        """
         
+        for s,subj in enumerate(self.subjects):
+            this_log = os.path.join(self.project_directory, subj, 'beh', '{}_{}_beh.csv'.format(subj,self.exp)) # derivatives folder            
+            this_df = pd.read_csv(this_log, float_precision='%.16f') 
+            this_df = this_df.loc[:, ~this_df.columns.str.contains('^Unnamed')] # remove all unnamed columns
+            
+            # loop through each type of event to lock events to...
+            for t,time_locked in enumerate(self.time_locked):
+                pupil_step_lim = self.pupil_step_lim[t] # kernel size is always the same for each event type
+                
+                this_blinks = pd.read_csv(os.path.join(self.project_directory, subj, 'beh', '{}_{}_recording-eyetracking_physio_{}_evoked_blinks.csv'.format(subj, self.exp, time_locked)))
+                this_blinks = this_blinks.loc[:, ~this_blinks.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                
+                blinks_per_trial = np.sum(this_blinks, axis=1)
+                
+                this_df['blinks_ratio'] = blinks_per_trial / (self.sample_rate*(pupil_step_lim[1]-pupil_step_lim[0])) # fraction of whole trial
+                this_df['blinks_exclude'] = this_df['blinks_ratio'] > thresh
+                
+                excluded_trials = this_df[this_df['blinks_exclude']].index.tolist()
+
+                print("{} {} Trials to exclude (>{} interpolated): {}".format(time_locked, subj, thresh, len(excluded_trials)))
+                #################################
+                # compute within baseline pupil
+                
+                this_blinks = np.array(this_blinks) # trials x timewindow
+                
+                base_start = 0
+                base_end = self.baseline_window*self.sample_rate
+                blinks_baseline = np.sum(this_blinks[:,int(base_start):int(base_end)], axis=1) 
+                
+                this_df['blink_ratio_{}_baseline'.format(time_locked)] = blinks_baseline / (self.baseline_window*self.sample_rate)
+                #################################
+                # compute within time windows of interest phasic
+                for twi,pupil_time_of_interest in enumerate(self.pupil_time_of_interest[t]): # multiple time windows to average
+                    SAVE_TRIALS = []
+                    for trial in np.arange(len(this_blinks)):
+                        ### PHASIC TIME WINDOWS
+                        # in seconds
+                        phase_start = -pupil_step_lim[0] + pupil_time_of_interest[0]
+                        phase_end = -pupil_step_lim[0] + pupil_time_of_interest[1]
+                        # in sample rate units
+                        phase_start = int(phase_start*self.sample_rate)
+                        phase_end = int(phase_end*self.sample_rate)
+                        # sum of blink samples within phasic time window
+                        this_phasic = np.sum(this_blinks[trial,phase_start:phase_end]) 
+                        SAVE_TRIALS.append(this_phasic)
+                    # save phasics
+                    this_df['blink_ratio_{}_t{}'.format(time_locked,twi+1)] = np.array(SAVE_TRIALS) / ((pupil_time_of_interest[1]-pupil_time_of_interest[0])*self.sample_rate)
+
+            #######################
+            this_df.to_csv(this_log, float_format='%.16f') # save per subject
+ 
+        print('success: compute_blink_percentages')
+       
+       
     def higherlevel_log_conditions(self,):
         """For each LOG file for each subject, computes mappings, accuracy, RT outliers (3 STD group level)
         
@@ -322,7 +384,7 @@ class higherLevel(object):
         # make a copy in derivatives folder to add phasics to
         for s,subj in enumerate(self.subjects):
             this_log = os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)) # derivatives folder            
-            this_df = pd.read_csv(this_log, float_format='%.16f') 
+            this_df = pd.read_csv(this_log, float_precision='%.16f') 
             # drop 'updating' column if it exists'
             this_df = this_df.drop(['updating'], axis=1, errors='ignore')
             
@@ -389,7 +451,7 @@ class higherLevel(object):
             
             # resave log file with new columns in derivatives folder
             this_df = this_df.loc[:, ~this_df.columns.str.contains('^Unnamed')] # remove all unnamed columns
-            this_df.to_csv(os.path.join(this_log, float_format='%.16f'))
+            this_df.to_csv(os.path.join(this_log), float_format='%.16f')
         print('success: higherlevel_log_conditions')
        
        
@@ -402,7 +464,7 @@ class higherLevel(object):
         """
         for s,subj in enumerate(self.subjects):
             this_log = os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)) # derivatives folder
-            B = pd.read_csv(this_log, float_format='%.16f') # behavioral file
+            B = pd.read_csv(this_log, float_precision = '%.16f') # behavioral file
             ### DROP EXISTING PHASICS COLUMNS TO PREVENT OLD DATA
             try: 
                 B = B.loc[:, ~B.columns.str.contains('^Unnamed')] # remove all unnamed columns
@@ -417,14 +479,14 @@ class higherLevel(object):
                 
                 for twi,pupil_time_of_interest in enumerate(self.pupil_time_of_interest[t]): # multiple time windows to average
                     # load evoked pupil file (all trials)
-                    P = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_format='%.16f') 
+                    P = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f') 
                     P = P.loc[:, ~P.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     P = np.array(P)
                 
                     SAVE_TRIALS = []
                     for trial in np.arange(len(P)):
                         # in seconds
-                        phase_start = -pupil_step_lim[0] + pupil_time_of_interest[0]
+                        phase_start = -pupil_step_lim[0] + pupil_time_of_interest[0] # have to add the baseline window in to reference event onset from at zero!
                         phase_end = -pupil_step_lim[0] + pupil_time_of_interest[1]
                         # in sample rate units
                         phase_start = int(phase_start*self.sample_rate)
@@ -442,8 +504,13 @@ class higherLevel(object):
         print('success: higherlevel_get_phasics')
         
                 
-    def create_subjects_dataframe(self,):
+    def create_subjects_dataframe(self, exclude_interp=0):
         """Combine behavior and phasic pupil dataframes including pupil baselines of all subjects into a single large dataframe. 
+        
+        Parameters
+        ----------
+        exclude_inter : boolean (default = 0)
+            Exclude the trials the have too much interpolate data (1) or not (0). 
         
         Notes
         -----
@@ -456,11 +523,11 @@ class higherLevel(object):
         
         # loop through subjects, get behavioral log files
         for s,subj in enumerate(self.subjects):
-            this_data = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)), float_format='%.16f')
+            this_data = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_beh.csv'.format(subj,self.exp)), float_precision='%.16f')
             this_data = this_data.loc[:, ~this_data.columns.str.contains('^Unnamed')] # remove all unnamed columns
             
             # open baseline pupil to add to dataframes as well
-            this_baseline = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_baselines.csv'.format(subj,self.exp,'target_locked')), float_format='%.16f')
+            this_baseline = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_baselines.csv'.format(subj,self.exp,'target_locked')), float_precision='%.16f')
             this_baseline = this_baseline.loc[:, ~this_baseline.columns.str.contains('^Unnamed')] # remove all unnamed columns
             this_data['pupil_baseline_target_locked'] = np.array(this_baseline)
             
@@ -480,6 +547,22 @@ class higherLevel(object):
         
         # drop phase 2 trials
         DF = DF[DF['trial_counter']<=200]
+        
+        ### mark all trials to exclude 
+        if exclude_interp:
+            DF['exclude'] = DF['outlier_rt']+DF['blinks_exclude']
+            DF['exclude'] = (DF['exclude'] > 0).astype(int)
+        else: # only exclude RT outliers
+            DF['exclude'] = DF['outlier_rt']
+            
+        # how many trials excluded due to blinks? 
+        print('Total blink trials excluded = {}%'.format(np.true_divide(np.sum(DF['blinks_exclude']),DF.shape[0])*100))
+        # per subject?
+        blinks_excluded = DF.groupby(['subject',])['blinks_exclude'].sum()
+        blinks_excluded.to_csv(os.path.join(self.dataframe_folder,'{}_blinks_excluded_counts_subject.csv'.format(self.exp)), float_format='%.16f')
+        # blinks per condition per subject
+        blinks_excluded = DF.groupby(['subject', 'mapping1', 'correct'])['blinks_exclude'].sum()
+        blinks_excluded.to_csv(os.path.join(self.dataframe_folder,'{}_blinks_excluded_conditions_subject.csv'.format(self.exp)), float_format='%.16f')
                 
         ### print how many outliers in phase 1
         print('Phase 1 outliers = {}%'.format(np.true_divide(np.sum(DF['outlier_rt']),DF.shape[0])*100))
@@ -506,14 +589,14 @@ class higherLevel(object):
         -----
         Save separate dataframes for the different combinations of factors in trial bin folder for plotting and jasp folders for statistical testing.
         """
-        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_format='%.16f')
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # drop all unnamed columns
         DF.sort_values(by=['subject','trial_counter'],inplace=True)
         DF.reset_index()
                     
         ############################
-        # drop outliers
-        DF = DF[DF['outlier_rt']==0]
+        # drop bad trials
+        DF = DF[DF['exclude']==0]
         ############################
         
         '''
@@ -590,7 +673,7 @@ class higherLevel(object):
             fig = plt.figure(figsize=(2, 2))
             ax = fig.add_subplot(111) # 1 subplot per bin window
             
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_correct-mapping1_{}.csv'.format(self.exp,pupil_dv)), float_format='%.16f')
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_correct-mapping1_{}.csv'.format(self.exp,pupil_dv)), float_precision='%.16f')
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
             # Group average per BIN WINDOW
@@ -618,7 +701,7 @@ class higherLevel(object):
         
             sns.despine(offset=10, trim=True)
             plt.tight_layout()
-            fig.savefig(os.path.join(self.figure_folder,'{}_correct*mapping1_{}_lines.pdf'.format(self.exp, pupil_dv)))
+            fig.savefig(os.path.join(self.figure_folder,'{}_correct-mapping1_{}_lines.pdf'.format(self.exp, pupil_dv)))
         print('success: plot_phasic_pupil_pe')
         
 
@@ -645,7 +728,7 @@ class higherLevel(object):
             fig = plt.figure(figsize=(2,2))
             ax = fig.add_subplot(111) # 1 subplot per bin windo
 
-            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,factor,pupil_dv)), float_format='%.16f')
+            DFIN = pd.read_csv(os.path.join(self.trial_bin_folder,'{}_{}_{}.csv'.format(self.exp,factor,pupil_dv)), float_precision='%.16f')
             DFIN = DFIN.loc[:, ~DFIN.columns.str.contains('^Unnamed')] # drop all unnamed columns
             
             # Group average per BIN WINDOW
@@ -696,8 +779,8 @@ class higherLevel(object):
            fig = plt.figure(figsize=(2,2))
            ax = fig.add_subplot(111) # 1 subplot per bin window
            
-           B = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_correct_rmanova.csv'.format(self.exp)), float_format='%.16f')
-           P = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_{}_rmanova.csv'.format(self.exp, pupil_dv)), float_format='%.16f')
+           B = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_correct_rmanova.csv'.format(self.exp)), float_precision='%.16f')
+           P = pd.read_csv(os.path.join(self.jasp_folder,'{}_mapping1_{}_rmanova.csv'.format(self.exp, pupil_dv)), float_precision='%.16f')
 
            # frequency effect
            P['main_effect_freq'] = (P['1']-P['0']) # mapping1=1 is 80% condition
@@ -738,7 +821,7 @@ class higherLevel(object):
         Drop omission trials (in subject loop).
         Output in dataframe folder.
         """
-        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_format='%.16f')
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
         DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
         csv_names = deepcopy(['subject','correct','mapping1','correct-mapping1'])
         factors = [['subject'],['correct'],['mapping1'],['correct','mapping1']]
@@ -756,7 +839,7 @@ class higherLevel(object):
                 
                 for s,subj in enumerate(self.subjects):
                     SBEHAV = DF[DF['subject']==subj].reset_index()
-                    SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_format='%.16f'))
+                    SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f'))
                     SPUPIL = SPUPIL.loc[:, ~SPUPIL.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     
                     #############################
@@ -767,7 +850,7 @@ class higherLevel(object):
                     SDATA = pd.concat([SBEHAV,SPUPIL],axis=1)
                     
                     #### DROP OMISSIONS HERE ####
-                    SDATA = SDATA[SDATA['outlier_rt'] == 0] # drop outliers based on RT
+                    SDATA = SDATA[SDATA['exclude'] == 0] # drop outliers based on RT
                     #############################
                     
                     evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
@@ -808,7 +891,7 @@ class higherLevel(object):
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
-        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,factor)), float_format='%.16f')
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,factor)), float_precision='%.16f')
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
     
         xticklabels = ['mean response']
@@ -837,10 +920,11 @@ class higherLevel(object):
         twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
         twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
         ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
-            
-        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -876,7 +960,7 @@ class higherLevel(object):
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
-        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_format='%.16f')
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     
         xticklabels = ['Error','Correct']
@@ -907,10 +991,9 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
-        ax.set_ylim(ylim_feed)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
         ax.set_ylabel('Pupil response\n(% signal change)')
@@ -939,7 +1022,7 @@ class higherLevel(object):
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
-        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_format='%.16f')
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
                     
         xticklabels = ['20%','80%']
@@ -970,9 +1053,9 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -1002,7 +1085,7 @@ class higherLevel(object):
         ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
 
         # Compute means, sems across group
-        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_format='%.16f')
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
         COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
         ########
         # make unique labels for each of the 4 conditions
@@ -1045,10 +1128,10 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
 
-        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
-        ax.set_ylim(ylim_feed)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
         ax.set_ylabel('Pupil response\n(% signal change)')
@@ -1257,7 +1340,7 @@ class higherLevel(object):
                     
         ############################
         # drop outliers
-        DF = DF[DF['outlier_rt']==0]
+        DF = DF[DF['exclude']==0]
         ############################
 
         '''
@@ -1396,7 +1479,7 @@ class higherLevel(object):
 
         ############################
         # drop outliers
-        DF = DF[DF['outlier_rt']==0]
+        DF = DF[DF['exclude']==0]
         ############################
         
         corr_out = []
@@ -1493,7 +1576,7 @@ class higherLevel(object):
                         SDATA = pd.concat([SBEHAV,SPUPIL],axis=1)
                     
                         #### DROP OMISSIONS HERE ####
-                        SDATA = SDATA[SDATA['outlier_rt'] == 0] # drop outliers based on RT
+                        SDATA = SDATA[SDATA['exclude'] == 0] # drop excluded
                         #############################
                     
                         evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
@@ -1580,9 +1663,9 @@ class higherLevel(object):
             tw_end = int(event_onset + (twi[1]*self.sample_rate))
             ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
             
-        xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
         ax.set_xticks(xticks)
-        ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
         ax.set_ylim(ylim_feed)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
         ax.set_xlabel('Time from feedback (s)')
@@ -1643,10 +1726,9 @@ class higherLevel(object):
                 tw_end = int(event_onset + (twi[1]*self.sample_rate))
                 ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
             
-            xticks = [event_onset, ((mid_point-event_onset)/2)+event_onset, mid_point, ((end_sample-mid_point)/2)+mid_point, end_sample]
+            xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
             ax.set_xticks(xticks)
-            ax.set_xticklabels([0, self.pupil_step_lim[t][1]*.25, self.pupil_step_lim[t][1]*.5, self.pupil_step_lim[t][1]*.75, self.pupil_step_lim[t][1]])
-            ax.set_ylim(ylim_feed)
+            ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
             ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
             ax.set_xlabel('Time from feedback (s)')
             ax.set_ylabel('r')
@@ -1659,4 +1741,1116 @@ class higherLevel(object):
         print('success: plot_pupil_information_regression_evoked')
 
 
+    def dataframe_evoked_pupil_higher_raw_bp(self):
+        """Compute evoked pupil responses for the RAW BP pupil time series.
+        
+        Notes
+        -----
+        Split by conditions of interest. Save as higher level dataframe per condition of interest. 
+        Evoked dataframes need to be combined with behavioral data frame, looping through subjects. 
+        DROP PHASE 2 trials.
+        Drop omission trials (in subject loop).
+        Output in dataframe folder.
+        """
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
+        csv_names = deepcopy(['subject','correct','mapping1','correct-mapping1'])
+        factors = [['subject'],['correct'],['mapping1'],['correct','mapping1']]
+        
+        for t,time_locked in enumerate(self.time_locked):
+            # Loop through conditions                
+            for c,cond in enumerate(csv_names):
+                # intialize dataframe per condition
+
+                COND = pd.DataFrame()
+                g_idx = deepcopy(factors)[c]       # need to add subject idx for groupby()
+                
+                if not cond == 'subject':
+                    g_idx.insert(0, 'subject') # get strings not list element
+                
+                for s,subj in enumerate(self.subjects):
+                    SBEHAV = DF[DF['subject']==subj].reset_index()
+                    SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_raw_bp_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f'))
+                    SPUPIL = SPUPIL.loc[:, ~SPUPIL.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+                    #############################
+                    # DROP THE LAST 200 trials from evoked DF
+                    SPUPIL = SPUPIL.iloc[:200,:]
+                    
+                    # merge behavioral and evoked dataframes so we can group by conditions
+                    SDATA = pd.concat([SBEHAV,SPUPIL],axis=1)
+                    
+                    #### DROP OMISSIONS HERE ####
+                    SDATA = SDATA[SDATA['exclude'] == 0] # drop outliers based on RT
+                    #############################
+                    
+                    evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
+                    df = SDATA.groupby(g_idx)[evoked_cols].mean() # only get kernels out
+                    df = pd.DataFrame(df).reset_index()
+                    # add to condition dataframe
+                    COND = pd.concat([COND,df],join='outer',axis=0) # can also do: this_cond = this_cond.append()  
+                # save output file
+                COND.to_csv(os.path.join(self.dataframe_folder,'{}_{}_raw_bp_evoked_{}.csv'.format(self.exp,time_locked,cond)), float_format='%.16f')
+        print('success: dataframe_evoked_pupil_higher RAW BP')
+
+
+    def dataframe_evoked_pupil_higher_interp_bp(self):
+        """Compute evoked pupil responses for the INTERPOLATE BP pupil time series.
+        
+        Notes
+        -----
+        Split by conditions of interest. Save as higher level dataframe per condition of interest. 
+        Evoked dataframes need to be combined with behavioral data frame, looping through subjects. 
+        DROP PHASE 2 trials.
+        Drop omission trials (in subject loop).
+        Output in dataframe folder.
+        """
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
+        csv_names = deepcopy(['subject','correct','mapping1','correct-mapping1'])
+        factors = [['subject'],['correct'],['mapping1'],['correct','mapping1']]
+        
+        for t,time_locked in enumerate(self.time_locked):
+            # Loop through conditions                
+            for c,cond in enumerate(csv_names):
+                # intialize dataframe per condition
+
+                COND = pd.DataFrame()
+                g_idx = deepcopy(factors)[c]       # need to add subject idx for groupby()
+                
+                if not cond == 'subject':
+                    g_idx.insert(0, 'subject') # get strings not list element
+                
+                for s,subj in enumerate(self.subjects):
+                    SBEHAV = DF[DF['subject']==subj].reset_index()
+                    SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_interp_bp_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f'))
+                    SPUPIL = SPUPIL.loc[:, ~SPUPIL.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+                    #############################
+                    # DROP THE LAST 200 trials from evoked DF
+                    SPUPIL = SPUPIL.iloc[:200,:]
+                    
+                    # merge behavioral and evoked dataframes so we can group by conditions
+                    SDATA = pd.concat([SBEHAV,SPUPIL],axis=1)
+                    
+                    #### DROP OMISSIONS HERE ####
+                    SDATA = SDATA[SDATA['exclude'] == 0] # drop outliers based on RT
+                    #############################
+                    
+                    evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
+                    df = SDATA.groupby(g_idx)[evoked_cols].mean() # only get kernels out
+                    df = pd.DataFrame(df).reset_index()
+                    # add to condition dataframe
+                    COND = pd.concat([COND,df],join='outer',axis=0) # can also do: this_cond = this_cond.append()  
+                # save output file
+                COND.to_csv(os.path.join(self.dataframe_folder,'{}_{}_interp_bp_evoked_{}.csv'.format(self.exp,time_locked,cond)), float_format='%.16f')
+        print('success: dataframe_evoked_pupil_higher INTERP BP')
     
+    
+    def dataframe_evoked_pupil_higher_nuisance(self):
+        """Compute evoked pupil responses for the NUISANCE pupil time series.
+        
+        Notes
+        -----
+        Split by conditions of interest. Save as higher level dataframe per condition of interest. 
+        Evoked dataframes need to be combined with behavioral data frame, looping through subjects. 
+        DROP PHASE 2 trials.
+        Drop omission trials (in subject loop).
+        Output in dataframe folder.
+        """
+        DF = pd.read_csv(os.path.join(self.dataframe_folder,'{}_subjects.csv'.format(self.exp)), float_precision='%.16f')
+        DF = DF.loc[:, ~DF.columns.str.contains('^Unnamed')] # remove all unnamed columns   
+        csv_names = deepcopy(['subject','correct','mapping1','correct-mapping1'])
+        factors = [['subject'],['correct'],['mapping1'],['correct','mapping1']]
+        
+        for t,time_locked in enumerate(self.time_locked):
+            # Loop through conditions                
+            for c,cond in enumerate(csv_names):
+                # intialize dataframe per condition
+
+                COND = pd.DataFrame()
+                g_idx = deepcopy(factors)[c]       # need to add subject idx for groupby()
+                
+                if not cond == 'subject':
+                    g_idx.insert(0, 'subject') # get strings not list element
+                
+                for s,subj in enumerate(self.subjects):
+                    SBEHAV = DF[DF['subject']==subj].reset_index()
+                    SPUPIL = pd.DataFrame(pd.read_csv(os.path.join(self.project_directory,subj,'{}_{}_recording-eyetracking_physio_{}_nuisance_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f'))
+                    SPUPIL = SPUPIL.loc[:, ~SPUPIL.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+                    #############################
+                    # DROP THE LAST 200 trials from evoked DF
+                    SPUPIL = SPUPIL.iloc[:200,:]
+                    
+                    # merge behavioral and evoked dataframes so we can group by conditions
+                    SDATA = pd.concat([SBEHAV,SPUPIL],axis=1)
+                    
+                    #### DROP OMISSIONS HERE ####
+                    SDATA = SDATA[SDATA['exclude'] == 0] # drop outliers based on RT
+                    #############################
+                    
+                    evoked_cols = np.char.mod('%d', np.arange(SPUPIL.shape[-1])) # get columns of pupil sample points only
+                    df = SDATA.groupby(g_idx)[evoked_cols].mean() # only get kernels out
+                    df = pd.DataFrame(df).reset_index()
+                    # add to condition dataframe
+                    COND = pd.concat([COND,df],join='outer',axis=0) # can also do: this_cond = this_cond.append()  
+                # save output file
+                COND.to_csv(os.path.join(self.dataframe_folder,'{}_{}_nuisance_evoked_{}.csv'.format(self.exp,time_locked,cond)), float_format='%.16f')
+        print('success: dataframe_evoked_pupil_higher NUISANCE')
+        
+
+    def plot_evoked_pupil_raw_bp(self):
+        """Plot evoked pupil time courses.
+        
+        Notes
+        -----
+        4 figures: mean response, accuracy, frequency, accuracy*frequency.
+        Always target_locked pupil response.
+        """
+        from matplotlib.ticker import FixedLocator
+        
+        ylim_feed = [-2.5,2.5]
+        tick_spacer = 2.5
+        
+        #######################
+        # FEEDBACK MEAN RESPONSE
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        factor = 'subject'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+                
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_raw_bp_evoked_{}.csv'.format(self.exp,time_locked,factor)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+    
+        xticklabels = ['mean response']
+        colors = ['black'] # black
+        alphas = [1]
+        
+        # plot time series
+        i=0
+        TS = np.array(COND.iloc[:,-kernel:]) # index from back to avoid extra unnamed column pandas
+        self.tsplot(ax, TS, color='k', label=xticklabels[i])
+        self.cluster_sig_bar_1samp(array=TS, x=pd.Series(range(TS.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+    
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+            
+        # shade baseline pupil
+        twb = [-self.baseline_window, 0]
+        baseline_onset = int(abs(twb[0]*self.sample_rate))
+        twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
+        twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
+        ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
+        
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+                
+        # compute peak of mean response to center time window around
+        m = np.mean(TS,axis=0)
+        argm = np.true_divide(np.argmax(m),self.sample_rate) + self.pupil_step_lim[t][0] # subtract pupil baseline to get timing
+        print('mean response = {} peak @ {} seconds'.format(np.max(m),argm))
+        # ax.axvline(np.argmax(m), lw=0.25, alpha=0.5, color = 'k')
+                
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_raw_bp_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # CORRECT
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'correct'
+        factor = 'correct'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_raw_bp_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+        xticklabels = ['Error','Correct']
+        colorsts = ['r','b',]
+        alpha_fills = [0.2,0.2] # fill
+        alpha_lines = [1,1]
+        save_conds = []
+        
+        # plot time series
+        for i,x in enumerate(np.unique(COND[factor])):
+            TS = COND[COND[factor]==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_difference = save_conds[0]-save_conds[1]
+        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        # ax.legend(loc='best')
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_raw_bp_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # FREQUENCY
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'mapping1'
+        factor = 'mapping1'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_raw_bp_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+        xticklabels = ['20%','80%']
+        colorsts = ['indigo','indigo',]
+        alpha_fills = [0.2,0.2] # fill
+        alpha_lines = [0.2,1]
+        save_conds = []
+        
+        # plot time series
+        for i,x in enumerate(np.unique(COND[factor])):
+            TS = COND[COND[factor]==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_difference = save_conds[0]-save_conds[1]
+        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        # ax.legend(loc='best')
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_raw_bp_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # CORRECT x MAPPING1
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'correct-mapping1'
+        factor = ['correct','mapping1']
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_raw_bp_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+        ########
+        # make unique labels for each of the 4 conditions
+        conditions = [
+            (COND['correct'] == 0) & (COND['mapping1'] == 1), # Easy Error 1
+            (COND['correct'] == 1) & (COND['mapping1'] == 1), # Easy Correct 2
+            (COND['correct'] == 0) & (COND['mapping1'] == 0), # Hard Error 3
+            (COND['correct'] == 1) & (COND['mapping1'] == 0), # Hard Correct 4
+            ]
+        values = [1,2,3,4]
+        conditions = np.select(conditions, values) # don't add as column to time series otherwise it gets plotted
+        ########
+                    
+        xticklabels = ['Error 80%','Correct 80%','Error 20%','Correct 20%']
+        colorsts = ['r','b','r','b']
+        alpha_fills = [0.2,0.2,0.1,0.1] # fill
+        alpha_lines = [1,1,.8,.8]
+        linestyle= ['solid','solid','dashed','dashed']
+        save_conds = []
+        # plot time series
+        
+        for i,x in enumerate(values):
+            TS = COND[conditions==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, linestyle=linestyle[i], color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_interaction = (save_conds[0]-save_conds[1]) - (save_conds[2]-save_conds[3])
+        self.cluster_sig_bar_1samp(array=pe_interaction, x=pd.Series(range(pe_interaction.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        ax.legend(loc='best')
+                
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_raw_bp_evoked_{}.pdf'.format(self.exp, csv_name)))
+        print('success: plot_evoked_pupil RAW BP')
+        
+
+    def plot_evoked_pupil_interp_bp(self):
+        """Plot evoked pupil time courses: INTERPOLATE and BP time series
+        
+        Notes
+        -----
+        4 figures: mean response, accuracy, frequency, accuracy*frequency.
+        Always target_locked pupil response.
+        """
+        ylim_feed = [-2.5,2.5]
+        tick_spacer = 2.5
+        
+        #######################
+        # FEEDBACK MEAN RESPONSE
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        factor = 'subject'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+                
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_interp_bp_evoked_{}.csv'.format(self.exp,time_locked,factor)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+    
+        xticklabels = ['mean response']
+        colors = ['black'] # black
+        alphas = [1]
+
+        # plot time series
+        i=0
+        TS = np.array(COND.iloc[:,-kernel:]) # index from back to avoid extra unnamed column pandas
+        self.tsplot(ax, TS, color='k', label=xticklabels[i])
+        self.cluster_sig_bar_1samp(array=TS, x=pd.Series(range(TS.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+    
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+            
+        # shade baseline pupil
+        twb = [-self.baseline_window, 0]
+        baseline_onset = int(abs(twb[0]*self.sample_rate))
+        twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
+        twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
+        ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+                
+        # compute peak of mean response to center time window around
+        m = np.mean(TS,axis=0)
+        argm = np.true_divide(np.argmax(m),self.sample_rate) + self.pupil_step_lim[t][0] # subtract pupil baseline to get timing
+        print('mean response = {} peak @ {} seconds'.format(np.max(m),argm))
+        # ax.axvline(np.argmax(m), lw=0.25, alpha=0.5, color = 'k')
+        
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_interp_bp_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # CORRECT
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'correct'
+        factor = 'correct'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_interp_bp_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+        xticklabels = ['Error','Correct']
+        colorsts = ['r','b',]
+        alpha_fills = [0.2,0.2] # fill
+        alpha_lines = [1,1]
+        save_conds = []
+        
+        # plot time series
+        for i,x in enumerate(np.unique(COND[factor])):
+            TS = COND[COND[factor]==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_difference = save_conds[0]-save_conds[1]
+        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        # ax.legend(loc='best')
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_interp_bp_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # FREQUENCY
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'mapping1'
+        factor = 'mapping1'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_interp_bp_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+        xticklabels = ['20%','80%']
+        colorsts = ['indigo','indigo',]
+        alpha_fills = [0.2,0.2] # fill
+        alpha_lines = [0.2,1]
+        save_conds = []
+        
+        # plot time series
+        for i,x in enumerate(np.unique(COND[factor])):
+            TS = COND[COND[factor]==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_difference = save_conds[0]-save_conds[1]
+        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        # ax.legend(loc='best')
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_interp_bp_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # CORRECT x MAPPING1
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'correct-mapping1'
+        factor = ['correct','mapping1']
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_interp_bp_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+        ########
+        # make unique labels for each of the 4 conditions
+        conditions = [
+            (COND['correct'] == 0) & (COND['mapping1'] == 1), # Easy Error 1
+            (COND['correct'] == 1) & (COND['mapping1'] == 1), # Easy Correct 2
+            (COND['correct'] == 0) & (COND['mapping1'] == 0), # Hard Error 3
+            (COND['correct'] == 1) & (COND['mapping1'] == 0), # Hard Correct 4
+            ]
+        values = [1,2,3,4]
+        conditions = np.select(conditions, values) # don't add as column to time series otherwise it gets plotted
+        ########
+                    
+        xticklabels = ['Error 80%','Correct 80%','Error 20%','Correct 20%']
+        colorsts = ['r','b','r','b']
+        alpha_fills = [0.2,0.2,0.1,0.1] # fill
+        alpha_lines = [1,1,.8,.8]
+        linestyle= ['solid','solid','dashed','dashed']
+        save_conds = []
+        # plot time series
+        
+        for i,x in enumerate(values):
+            TS = COND[conditions==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, linestyle=linestyle[i], color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_interaction = (save_conds[0]-save_conds[1]) - (save_conds[2]-save_conds[3])
+        self.cluster_sig_bar_1samp(array=pe_interaction, x=pd.Series(range(pe_interaction.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        ax.legend(loc='best')
+                
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_interp_bp_evoked_{}.pdf'.format(self.exp, csv_name)))
+        print('success: plot_evoked_pupil_interp_bp')
+
+
+    def plot_evoked_pupil_nuisance(self):
+        """Plot evoked pupil time courses: NUISANCE time series
+        
+        Notes
+        -----
+        4 figures: mean response, accuracy, frequency, accuracy*frequency.
+        Always target_locked pupil response.
+        """
+        ylim_feed = [-2.5,2.5]
+        tick_spacer = 2.5
+        
+        #######################
+        # FEEDBACK MEAN RESPONSE
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        factor = 'subject'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+                
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_nuisance_evoked_{}.csv'.format(self.exp,time_locked,factor)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+    
+        xticklabels = ['mean response']
+        colors = ['black'] # black
+        alphas = [1]
+
+        # plot time series
+        i=0
+        TS = np.array(COND.iloc[:,-kernel:]) # index from back to avoid extra unnamed column pandas
+        self.tsplot(ax, TS, color='k', label=xticklabels[i])
+        self.cluster_sig_bar_1samp(array=TS, x=pd.Series(range(TS.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+    
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+            
+        # shade baseline pupil
+        twb = [-self.baseline_window, 0]
+        baseline_onset = int(abs(twb[0]*self.sample_rate))
+        twb_begin = int(baseline_onset + (twb[0]*self.sample_rate))
+        twb_end = int(baseline_onset + (twb[1]*self.sample_rate))
+        ax.axvspan(twb_begin,twb_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+                
+        # compute peak of mean response to center time window around
+        m = np.mean(TS,axis=0)
+        argm = np.true_divide(np.argmax(m),self.sample_rate) + self.pupil_step_lim[t][0] # subtract pupil baseline to get timing
+        print('mean response = {} peak @ {} seconds'.format(np.max(m),argm))
+        # ax.axvline(np.argmax(m), lw=0.25, alpha=0.5, color = 'k')
+        
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_nuisance_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # CORRECT
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'correct'
+        factor = 'correct'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_nuisance_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+        xticklabels = ['Error','Correct']
+        colorsts = ['r','b',]
+        alpha_fills = [0.2,0.2] # fill
+        alpha_lines = [1,1]
+        save_conds = []
+        
+        # plot time series
+        for i,x in enumerate(np.unique(COND[factor])):
+            TS = COND[COND[factor]==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_difference = save_conds[0]-save_conds[1]
+        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        # ax.legend(loc='best')
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_nuisance_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # FREQUENCY
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'mapping1'
+        factor = 'mapping1'
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_nuisance_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    
+        xticklabels = ['20%','80%']
+        colorsts = ['indigo','indigo',]
+        alpha_fills = [0.2,0.2] # fill
+        alpha_lines = [0.2,1]
+        save_conds = []
+        
+        # plot time series
+        for i,x in enumerate(np.unique(COND[factor])):
+            TS = COND[COND[factor]==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_difference = save_conds[0]-save_conds[1]
+        self.cluster_sig_bar_1samp(array=pe_difference, x=pd.Series(range(pe_difference.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        # ax.legend(loc='best')
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_nuisance_evoked_{}.pdf'.format(self.exp, factor)))
+        
+        #######################
+        # CORRECT x MAPPING1
+        #######################
+        fig = plt.figure(figsize=(4,2))
+        ax = fig.add_subplot(111)
+        t = 0
+        time_locked = 'target_locked'
+        csv_name = 'correct-mapping1'
+        factor = ['correct','mapping1']
+        kernel = int((self.pupil_step_lim[t][1]-self.pupil_step_lim[t][0])*self.sample_rate) # length of evoked responses
+        # determine time points x-axis given sample rate
+        event_onset = int(abs(self.pupil_step_lim[t][0]*self.sample_rate))
+        end_sample = int((self.pupil_step_lim[t][1] - self.pupil_step_lim[t][0])*self.sample_rate)
+        mid_point = int(np.true_divide(end_sample-event_onset,2) + event_onset)
+
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+
+        # Compute means, sems across group
+        COND = pd.read_csv(os.path.join(self.dataframe_folder,'{}_{}_nuisance_evoked_{}.csv'.format(self.exp,time_locked,csv_name)), float_precision='%.16f')
+        COND = COND.loc[:, ~COND.columns.str.contains('^Unnamed')] # remove all unnamed columns
+        ########
+        # make unique labels for each of the 4 conditions
+        conditions = [
+            (COND['correct'] == 0) & (COND['mapping1'] == 1), # Easy Error 1
+            (COND['correct'] == 1) & (COND['mapping1'] == 1), # Easy Correct 2
+            (COND['correct'] == 0) & (COND['mapping1'] == 0), # Hard Error 3
+            (COND['correct'] == 1) & (COND['mapping1'] == 0), # Hard Correct 4
+            ]
+        values = [1,2,3,4]
+        conditions = np.select(conditions, values) # don't add as column to time series otherwise it gets plotted
+        ########
+                    
+        xticklabels = ['Error 80%','Correct 80%','Error 20%','Correct 20%']
+        colorsts = ['r','b','r','b']
+        alpha_fills = [0.2,0.2,0.1,0.1] # fill
+        alpha_lines = [1,1,.8,.8]
+        linestyle= ['solid','solid','dashed','dashed']
+        save_conds = []
+        # plot time series
+        
+        for i,x in enumerate(values):
+            TS = COND[conditions==x] # select current condition data only
+            TS = np.array(TS.iloc[:,-kernel:])
+            self.tsplot(ax, TS, linestyle=linestyle[i], color=colorsts[i], label=xticklabels[i], alpha_fill=alpha_fills[i], alpha_line=alpha_lines[i])
+            save_conds.append(TS) # for stats
+        
+        # stats        
+        ### COMPUTE INTERACTION TERM AND TEST AGAINST 0!
+        pe_interaction = (save_conds[0]-save_conds[1]) - (save_conds[2]-save_conds[3])
+        self.cluster_sig_bar_1samp(array=pe_interaction, x=pd.Series(range(pe_interaction.shape[-1])), yloc=1, color='black', ax=ax, threshold=0.05, nrand=5000, cluster_correct=True)
+
+        # set figure parameters
+        ax.axvline(int(abs(self.pupil_step_lim[t][0]*self.sample_rate)), lw=1, alpha=1, color = 'k') # Add vertical line at t=0
+        ax.axhline(0, lw=1, alpha=1, color = 'k') # Add horizontal line at t=0
+        
+        # Shade all time windows of interest in grey, will be different for events
+        for twi in self.pupil_time_of_interest[t]:       
+            tw_begin = int(event_onset + (twi[0]*self.sample_rate))
+            tw_end = int(event_onset + (twi[1]*self.sample_rate))
+            ax.axvspan(tw_begin,tw_end, facecolor='k', alpha=0.1)
+
+        xticks = [event_onset, event_onset+(250*1), event_onset+(250*2), event_onset+(250*3), event_onset+(250*4), event_onset+(250*5), event_onset+(250*6)]
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([self.pupil_step_lim[t][1]-(.5*6), self.pupil_step_lim[t][1]-(.5*5), self.pupil_step_lim[t][1]-(.5*4), self.pupil_step_lim[t][1]-(.5*3), self.pupil_step_lim[t][1]-(.5*2),  self.pupil_step_lim[t][1]-(.5*1), self.pupil_step_lim[t][1]])
+        # ax.set_ylim(ylim_feed)
+        # ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick_spacer))
+        ax.set_xlabel('Time from feedback (s)')
+        ax.set_ylabel('Pupil response\n(% signal change)')
+        ax.set_title(time_locked)
+        ax.legend(loc='best')
+                
+        # whole figure format
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.figure_folder,'{}_nuisance_evoked_{}.pdf'.format(self.exp, csv_name)))
+        print('success: plot_evoked_pupil_nuisance')
+        
+    
+    def compute_phasics_interp_bp(self,):
+        """Compute the correlation between the 'clean' and 'unclean' post-feedback pupil response in the time windows of interest.
+        """
+        
+        for s,subj in enumerate(self.subjects):
+            # save as new file
+            out_log = os.path.join(self.project_directory,subj, 'beh', '{}_{}_interp_bp_phasics.csv'.format(subj,self.exp)) # derivatives folder
+            
+            this_log = os.path.join(self.project_directory,subj, 'beh', '{}_{}_beh.csv'.format(subj,self.exp)) # derivatives folder
+            B = pd.read_csv(this_log, float_precision = '%.16f') # behavioral file
+
+            ### DROP EXISTING PHASICS COLUMNS TO PREVENT OLD DATA
+            try: 
+                B = B.loc[:, ~B.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                # B = B.loc[:, ~B.columns.str.contains('_locked')] # remove all old phasic pupil columns
+            except:
+                pass
+                
+            # loop through each type of event to lock events to...
+            for t,time_locked in enumerate(self.time_locked):
+                
+                pupil_step_lim = self.pupil_step_lim[t] # kernel size is always the same for each event type
+                
+                for twi,pupil_time_of_interest in enumerate(self.pupil_time_of_interest[t]): # multiple time windows to average
+                    # load evoked pupil file (all trials)
+                    P = pd.read_csv(os.path.join(self.project_directory,subj,'beh','{}_{}_recording-eyetracking_physio_{}_interp_bp_evoked_basecorr.csv'.format(subj,self.exp,time_locked)), float_precision='%.16f') 
+                    P = P.loc[:, ~P.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    P = np.array(P)
+                
+                    SAVE_TRIALS = []
+                    for trial in np.arange(len(P)):
+                        # in seconds
+                        phase_start = -pupil_step_lim[0] + pupil_time_of_interest[0]
+                        phase_end = -pupil_step_lim[0] + pupil_time_of_interest[1]
+                        # in sample rate units
+                        phase_start = int(phase_start*self.sample_rate)
+                        phase_end = int(phase_end*self.sample_rate)
+                        # mean within phasic time window
+                        this_phasic = np.nanmean(P[trial,phase_start:phase_end]) 
+                        SAVE_TRIALS.append(this_phasic)
+                    # save phasics
+                    B['pupil_{}_t{}_interp_bp'.format(time_locked,twi+1)] = np.array(SAVE_TRIALS)
+                                        
+                    #######################
+                    B = B.loc[:, ~B.columns.str.contains('^Unnamed')] # remove all unnamed columns
+                    B.to_csv(out_log, float_format='%.16f')
+                    print('subject {}, {} phasic pupil extracted {}'.format(subj, time_locked, pupil_time_of_interest))
+        print('success: compute_phasics_interp_bp')
+        
+    
+    def correlation_interp_clean(self,):
+        """Compute the correlation between the 'clean' and 'unclean' post-feedback pupil response in the time windows of interest.
+        """
+        
+        df_out = pd.DataFrame()
+        # loop through each type of event to lock events to...
+        for t,time_locked in enumerate(self.time_locked):
+            
+            for twi,pupil_time_of_interest in enumerate(self.pupil_time_of_interest[t]): # multiple time windows to average
+            
+                save_coeffs = []
+                for s,subj in enumerate(self.subjects):
+                    this_log = os.path.join(self.project_directory,subj, 'beh', '{}_{}_interp_bp_phasics.csv'.format(subj,self.exp)) # derivatives folder
+                    B = pd.read_csv(this_log, float_precision = '%.16f') # behavioral file
+                
+                    x = B['pupil_{}_t{}_interp_bp'.format(time_locked,twi+1)]
+                    y = B['pupil_{}_t{}'.format(time_locked,twi+1)]
+                    x = np.array(x)
+                    y = np.array(y)
+                    
+                    mask = ~np.isnan(x) & ~np.isnan(y)
+
+                    # Apply the mask
+                    x_clean = x[mask]
+                    y_clean = y[mask]
+                
+                    r, pvalue = stats.pearsonr(x_clean, y_clean)
+
+                
+                    save_coeffs.append(r)
+                df_out['r_pupil_{}_t{}'.format(time_locked,twi+1)] = save_coeffs
+                
+        df_out.to_csv(os.path.join(self.jasp_folder,'{}_preprocessing_sanity_correlation_clean_interp.csv'.format(self.exp)), float_format='%.16f') # for stats
+        print('success: correlation_interp_clean')
+    
+    
+    def group_r2_deconvolution(self,):
+        """Average r2 from preprocessing deconvolution at the group level.
+        
+        Notes
+        -----
+        Overwrites original log file (this_log).
+        """
+        r2_all = []
+        for s,subj in enumerate(self.subjects):
+            this_log = os.path.join(self.project_directory,subj, 'beh', '{}_{}_recording-eyetracking_physio_r2_deconvolution.csv'.format(subj, self.exp)) # derivatives folder
+            B = pd.read_csv(this_log, float_precision='%.16f') # behavioral file
+            B = B.loc[:, ~B.columns.str.contains('^Unnamed')] # remove all unnamed columns
+            r2_all.append(B['r2_deconvolution'])
+        
+        df_out = pd.DataFrame(r2_all)        
+        df_out.to_csv(os.path.join(self.jasp_folder,'{}_preprocessing_sanity_r2_deconvolution.csv'.format(self.exp)), float_format='%.16f') # for stats
+        print('success: group_r2_deconvolution')
+        
+        
+        

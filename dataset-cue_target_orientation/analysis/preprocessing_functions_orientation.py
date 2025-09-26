@@ -148,7 +148,7 @@ class pupilPreprocess(object):
         -------
         Saves the pupil dilation time series in the project directory.
         Extracts messages and pupil from raw text files:
-        Messages are in the 'L Raw X [px]' column.
+        Messages are in the 'L Raw X [px]' column (even though it seems to have the 'wrong' name!)
         Pupil is in the 'R Dia X [px]' column.
         """
         usecols = ['Time','Type','L Raw X [px]','R Dia X [px]'] # only get these columns out
@@ -176,17 +176,18 @@ class pupilPreprocess(object):
         -------
         Current pupil time course is always 'self.pupil'.
         Steps include: interpolation around blinks based on markers, then based on peaks, bandpass filtering, nuisance regression on blinks/saccades,
-        convert to percent signal change (z-score also saved).
+        convert to percent signal change.
         Saves time series at each stage with labels, global variables  (e.g., self.pupil_interp)
         Calls the preprocessing plot for each subject.
         """
         cols1 = ['index', 'pupil'] # before preprocessing
-        cols2 = ['index', 'pupil', 'pupil_interp','pupil_bp','pupil_clean','pupil_psc', 'pupil_zscore']        
+        cols2 = ['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_nuisance', 'pupil_nuisance_psc']        
                 
         try:
             self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols1)
         except:
             self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols2)
+            self.TS.drop(columns=['pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_nuisance', 'pupil_nuisance_psc'], inplace=True)
                 
         self.pupil_raw = np.array(self.TS['pupil'])
         
@@ -196,22 +197,106 @@ class pupilPreprocess(object):
         self.bandpass_filter()              # third-order Butterworth, 0.01-6Hz
         self.regress_blinks_saccades()      # use deconvolution to remove blink + saccade events
         self.percent_signal_change()        # converts to percent signal change
-        self.zscore()                       # zscores pupil
         
         # save all pupil stages
-        # 1: raw, 2: blink interpolated, 3: bandpass, 4: deconvolution, 5: percent signal change
-        self.TS['pupil_interp']  = self.pupil_interp
-        self.TS['pupil_bp']      = self.pupil_bp # band passed
-        self.TS['pupil_clean']   = self.pupil_clean
-        self.TS['pupil_psc']     = self.pupil_psc
-        self.TS['pupil_zscore']  = self.pupil_zscore
+        # 1: raw, 2: blink interpolated, 3: bandpass, 4: clean deconvolution, 5: percent signal change, 6: nuisance, 7: nuisance percent signal change
+        self.TS['pupil_interp']       = self.pupil_interp
+        self.TS['pupil_bp']           = self.pupil_bp # band passed
+        self.TS['pupil_clean']        = self.pupil_clean
+        self.TS['pupil_psc']          = self.pupil_psc
+        self.TS['pupil_nuisance']     = self.pupil_nuisance
+        self.TS['pupil_nuisance_psc'] = self.pupil_nuisance_psc
+
         np.save(os.path.join(self.project_directory, '{}.npy'.format(self.alias)), np.array(self.TS))
         
-        self.plot_pupil()                   # plots the pupil in all stages
+        self.plot_pupil()   # plots the pupil in all stages
         
+        # how many samples for this participant in total?
+        save_nsamples = pd.DataFrame([[self.pupil.shape[0]]])
+        save_nsamples.to_csv(os.path.join(self.project_directory, '{}_nsamples.csv'.format(self.alias)))
         print('Pupil data preprocessed: Subject {}'.format(self.subject) )
         
+
+    def preprocess_pupil_raw_bp(self,):
+        """Carries out pupil preprocessing routine on raw data, no interpolation or nuisance regression. Only bandpass filtering.
+
+        Notes
+        -------
+        Current pupil time course is always 'self.pupil'.
+        Steps include: bandpass filtering
+        convert to percent signal change.
+        Saves time series at each stage with labels, global variables  (e.g., self.pupil_interp)
+        Calls the preprocessing plot for each subject.
+        """
+        cols1 = ['index', 'pupil'] # before preprocessing
+        cols2 = ['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_nuisance', 'pupil_nuisance_psc']        
+                
+        try:
+            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols1)
+        except:
+            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols2)
+            self.TS.drop(columns=['pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_nuisance', 'pupil_nuisance_psc'], inplace=True)
+                
+        self.pupil_raw = np.array(self.TS['pupil'])
+        
+        self.pupil = self.pupil_raw         # self.pupil is always current pupil stage     
+        self.bandpass_filter()              # third-order Butterworth, 0.01-6Hz
+        self.percent_signal_change()        # converts to percent signal change
+        
+        # save all pupil stages
+        # 1: raw, 2: bandpass, 3: percent signal change,
+        self.TS['pupil_bp']      = self.pupil_bp # band passed
+        self.TS['pupil_psc']     = self.pupil_psc
+        np.save(os.path.join(self.project_directory, '{}_raw_bp.npy'.format(self.alias)), np.array(self.TS))
+        
+        self.plot_pupil(pptype='_raw_bp')                   # plots the pupil in all stages
+        print('Pupil data preprocessed RAW BP: Subject {}'.format(self.subject) )
+        
     
+    def preprocess_pupil_interp_bp(self,):
+        """Carries out pupil preprocessing routine with interpolation and bandpass filtering but no nuisance regression.
+
+        Notes
+        -------
+        Current pupil time course is always 'self.pupil'.
+        Steps include: interpolation around blinks based on markers, then based on peaks, bandpass filtering,
+        convert to percent signal change.
+        Saves time series at each stage with labels, global variables  (e.g., self.pupil_interp)
+        Calls the preprocessing plot for each subject.
+        """
+        cols1 = ['index', 'pupil'] # before preprocessing
+        cols2 = ['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_nuisance', 'pupil_nuisance_psc']        
+                
+        try:
+            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols1)
+        except:
+            self.TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols2)
+            self.TS.drop(columns=['pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_nuisance', 'pupil_nuisance_psc'], inplace=True)
+            
+        self.pupil_raw = np.array(self.TS['pupil'])
+        
+        self.pupil = self.pupil_raw         # self.pupil is always current pupil stage     
+        self.interpolate_blinks_markers()   # uses marker (missing data) to detect blinks and missing events
+        self.interpolate_blinks_peaks()     # uses derivative to detect blinks still remaining
+        self.bandpass_filter()              # third-order Butterworth, 0.01-6Hz
+        self.percent_signal_change()        # converts to percent signal change
+        
+        # save all pupil stages
+        # 1: raw, 2: blink interpolated, 3: bandpass, 4: percent signal change
+        self.TS['pupil_interp']  = self.pupil_interp
+        self.TS['pupil_bp']      = self.pupil_bp # band passed
+        self.TS['pupil_psc']     = self.pupil_psc
+        np.save(os.path.join(self.project_directory, '{}_interp_bp.npy'.format(self.alias)), np.array(self.TS))
+        
+        self.plot_pupil(pptype='_interp_bp')  # plots the pupil in all stages
+        
+        # how many samples for this participant in total?
+        save_nsamples = pd.DataFrame([[self.pupil.shape[0]]])
+        save_nsamples.to_csv(os.path.join(self.project_directory, '{}_nsamples.csv'.format(self.alias)))
+        
+        print('Pupil data preprocessed INTERP BP: Subject {}'.format(self.subject) )
+    
+                
     def detect_peaks(self, x, mph=None, mpd=1, threshold=0, edge='rising', kpsh=False, valley=False, show=False, ax=None):
         """Detect peaks in data based on their amplitude and other features.
         
@@ -372,63 +457,6 @@ class pupilPreprocess(object):
             shell()
         return np.array(nan_start), np.array(nan_end)
         
-        
-    def interpolate_blinks_peaks(self,):
-        """Perform linear interpolation around peaks in the rate of change of the pupil size.
-        
-        Notes
-        -----
-        The results are stored in self.pupil_interp, self.pupil is also updated.
-        Change mpd,mph in peaks_down, peaks_up to make more or less conservative.
-        After calling this method, additional interpolation may be performed by calling self.interpolate_blinks_markers().
-        """
-        time_window = self.time_window_blinks
-        lin_interpolation_points = [[-1*self.sample_rate*time_window], [self.sample_rate*time_window]]
-        coalesce_period = int(0.75*self.sample_rate)
-        
-        # we do not want to start or end with a 0:
-        self.pupil_interp = deepcopy(self.pupil[:])
-                
-        interpolated_time_points = np.zeros(len(self.pupil))
-        self.pupil_diff = (np.diff(self.pupil_interp) - np.diff(self.pupil_interp).mean()) / np.diff(self.pupil_interp).std() # derivative of time series
-        peaks_down = self.detect_peaks(self.pupil_diff, mph=self.mph, mpd=self.mpd, threshold=self.threshold, edge='rising', kpsh=False, valley=False, show=False, ax=False)
-        peaks_up = self.detect_peaks(self.pupil_diff*-1, mph=self.mph, mpd=self.mpd, threshold=self.threshold, edge='rising', kpsh=False, valley=False, show=False, ax=False)
-        peaks = np.sort(np.concatenate((peaks_down, peaks_up)))
- 
-        if len(peaks) > 0:
-            # prepare:
-            # peak_starts = np.sort(np.concatenate((peaks-1, self.blink_starts)))
-            # peak_ends = np.sort(np.concatenate((peaks+1, self.blink_ends)))
-            peak_starts = np.sort((peaks-1))
-            peak_ends = np.sort((peaks+1))
-            start_indices = np.ones(peak_starts.shape[0], dtype=bool)
-            end_indices = np.ones(peak_ends.shape[0], dtype=bool)
-            for i in range(peak_starts.shape[0]):
-                try:
-                    if peak_starts[i+1] - peak_ends[i] <= coalesce_period:
-                        start_indices[i+1] = False
-                        end_indices[i] = False
-                except IndexError:
-                    pass
-            peak_starts = peak_starts[start_indices]
-            peak_ends = peak_ends[end_indices] 
-            
-            # interpolate:
-            points_for_interpolation = np.array([peak_starts, peak_ends], dtype=int).T + np.array(lin_interpolation_points).T
-            for itp in points_for_interpolation:
-                itp = [int(x) for x in itp]
-                try:
-                    self.pupil_interp[itp[0]:itp[-1]] = np.linspace(self.pupil_interp[itp[0]], self.pupil_interp[itp[-1]], itp[-1]-itp[0])
-                    interpolated_time_points[itp[0]:itp[-1]] = 1
-                except:
-                    pass
-            # for regressing out
-            self.blink_starts = np.sort(np.append(self.blink_starts, np.array(peak_starts), axis=0))
-            self.blink_ends = np.sort(np.append(self.blink_ends, np.array(peak_ends), axis=0))
-        # interpolated pupil
-        self.pupil = self.pupil_interp
-        print('pupil blinks interpolated from derivative')         
-    
     
     def interpolate_blinks_markers(self, ):
         """Perform linear interpolation around blinks based on blink markers.
@@ -491,7 +519,73 @@ class pupilPreprocess(object):
         # for regression
         self.blink_starts = np.sort(np.append(self.blink_starts, np.array(blink_starts), axis=0))
         self.blink_ends = np.sort(np.append(self.blink_ends, np.array(blink_ends), axis=0))
+        
+        save_blinks = pd.DataFrame()
+        save_blinks['blink_starts_markers'] = self.blink_starts
+        save_blinks['blink_ends_markers'] = self.blink_ends
+        save_blinks.to_csv(os.path.join(self.project_directory, '{}_blinks_markers.csv'.format(self.alias)))
         print('pupil blinks interpolated from markers')
+        
+        
+    def interpolate_blinks_peaks(self,):
+        """Perform linear interpolation around peaks in the rate of change of the pupil size.
+        
+        Notes
+        -----
+        The results are stored in self.pupil_interp, self.pupil is also updated.
+        Change mpd,mph in peaks_down, peaks_up to make more or less conservative.
+        """
+        time_window = self.time_window_blinks
+        lin_interpolation_points = [[-1*self.sample_rate*time_window], [self.sample_rate*time_window]]
+        coalesce_period = int(0.75*self.sample_rate)
+        
+        # we do not want to start or end with a 0:
+        self.pupil_interp = deepcopy(self.pupil[:])
+                
+        interpolated_time_points = np.zeros(len(self.pupil))
+        self.pupil_diff = (np.diff(self.pupil_interp) - np.diff(self.pupil_interp).mean()) / np.diff(self.pupil_interp).std() # derivative of time series
+        peaks_down = self.detect_peaks(self.pupil_diff, mph=self.mph, mpd=self.mpd, threshold=self.threshold, edge='rising', kpsh=False, valley=False, show=False, ax=False)
+        peaks_up = self.detect_peaks(self.pupil_diff*-1, mph=self.mph, mpd=self.mpd, threshold=self.threshold, edge='rising', kpsh=False, valley=False, show=False, ax=False)
+        peaks = np.sort(np.concatenate((peaks_down, peaks_up)))
+ 
+        if len(peaks) > 0:
+            # prepare:
+            # peak_starts = np.sort(np.concatenate((peaks-1, self.blink_starts)))
+            # peak_ends = np.sort(np.concatenate((peaks+1, self.blink_ends)))
+            peak_starts = np.sort((peaks-1))
+            peak_ends = np.sort((peaks+1))
+            start_indices = np.ones(peak_starts.shape[0], dtype=bool)
+            end_indices = np.ones(peak_ends.shape[0], dtype=bool)
+            for i in range(peak_starts.shape[0]):
+                try:
+                    if peak_starts[i+1] - peak_ends[i] <= coalesce_period:
+                        start_indices[i+1] = False
+                        end_indices[i] = False
+                except IndexError:
+                    pass
+            peak_starts = peak_starts[start_indices]
+            peak_ends = peak_ends[end_indices] 
+            
+            # interpolate:
+            points_for_interpolation = np.array([peak_starts, peak_ends], dtype=int).T + np.array(lin_interpolation_points).T
+            for itp in points_for_interpolation:
+                itp = [int(x) for x in itp]
+                try:
+                    self.pupil_interp[itp[0]:itp[-1]] = np.linspace(self.pupil_interp[itp[0]], self.pupil_interp[itp[-1]], itp[-1]-itp[0])
+                    interpolated_time_points[itp[0]:itp[-1]] = 1
+                except:
+                    pass
+            # for regressing out
+            self.blink_starts = np.sort(np.append(self.blink_starts, np.array(peak_starts), axis=0))
+            self.blink_ends = np.sort(np.append(self.blink_ends, np.array(peak_ends), axis=0))
+        # interpolated pupil
+        self.pupil = self.pupil_interp
+        
+        save_blinks = pd.DataFrame()
+        save_blinks['blink_starts_peaks'] = self.blink_starts
+        save_blinks['blink_ends_peaks'] = self.blink_ends
+        save_blinks.to_csv(os.path.join(self.project_directory, '{}_blinks_peaks.csv'.format(self.alias)))
+        print('pupil blinks interpolated from derivative') 
             
             
     def bandpass_filter(self,):
@@ -554,7 +648,7 @@ class pupilPreprocess(object):
             blinks = np.array([0.5])
 
         events = [blinks]
-        event_names = ['blinks']
+        event_names = ['blinks & saccades']
         
         #######################
         #### Deconvolution ####
@@ -618,7 +712,7 @@ class pupilPreprocess(object):
             plt.tight_layout()
             # Save figure
             fig.savefig(os.path.join(self.figure_folder,'{}_Deconvolution.pdf'.format(self.subject)))
-
+        
         # fit:
         # ----
         # define objective function: returns the array to be minimized        
@@ -678,7 +772,14 @@ class pupilPreprocess(object):
         # clean data:
         self.pupil_clean = GLM.residuals + self.pupil_baseline.mean() # CLEANED DATA + MEAN added back
         # final timeseries:
-        self.pupil = self.pupil_clean 
+        self.pupil = self.pupil_clean # residuals, after regression with blinks/saccades
+        self.pupil_nuisance = self.GLM_predicted # the nuisance events time series
+        
+        # save r2 and nuisance regression model fit
+        save_r2 = pd.DataFrame()
+        save_r2['r2_deconvolution'] = fd.rsq # deconvolution
+        save_r2['GLM_pearsonr'] = self.GLM_r # measured vs. predicted pearson coefficient nuisance regression
+        save_r2.to_csv(os.path.join(self.project_directory, '{}_r2_deconvolution.csv'.format(self.alias)))
         print('pupil blinks and saccades removed with linear regression')
            
            
@@ -694,29 +795,19 @@ class pupilPreprocess(object):
             self.pupil_psc = self.pupil + self.pupil_baseline.mean()
         else:
             self.pupil_psc = deepcopy(self.pupil)
+            self.pupil_nuisance_psc = (self.pupil_nuisance/np.mean(self.pupil_nuisance)*100)-100 # nuisance events percent signal change
             
         self.pupil_psc = (self.pupil_psc/np.mean(self.pupil_psc)*100)-100 
         print('pupil converted percent signal change')
     
-    
-    def zscore(self,):
-        """Z-score pupil time series.
         
-        Notes
-        -----
-        self.pupil is not updated.
-        """
-        if self.add_base: # did not regress out blinks/saccades
-            self.pupil_zscore = self.pupil + self.pupil_baseline.mean()
-        else:
-            self.pupil_zscore = deepcopy(self.pupil)
-            
-        self.pupil_zscore = sp.stats.zscore(self.pupil_zscore)
-        print('pupil z-scored')
-        
-        
-    def plot_pupil(self,):               
+    def plot_pupil(self, pptype=''):               
         """Plot the pupil in all preprocessing stages (1 figure per subject).
+        
+        Parameters
+        ----------
+        pptype : string (default = '')
+            Pre-processing type for sanity checks.
         
         Notes
         -----
@@ -809,9 +900,9 @@ class pupilPreprocess(object):
         sns.despine(offset=10, trim=True)
         plt.tight_layout()
         # Save figure
-        fig.savefig(os.path.join(self.figure_folder, '{}_preprocessing.pdf'.format(self.subject)))
-    
-    
+        fig.savefig(os.path.join(self.figure_folder, '{}{}_preprocessing.pdf'.format(self.subject, pptype)))
+        
+        
 class trials(object):
     """Define a class for the single trial level pupil data.
 
@@ -878,25 +969,29 @@ class trials(object):
                 
                 
     def event_related_subjects(self,pupil_dv):
-        """Cut out time series of pupil data locked to time points of interest within the given kernel.
+        """Cut out time series of pupil data locked to time points of interest within the given kernel and mark blinks per trial.
             
         Parameters
             ----------
         pupil_dv : string
-            The pupil time series to be processed (e.g., 'pupil_psc' or 'pupil_zscore')
+            The pupil time series to be processed (e.g., 'pupil_psc')
             
         Notes
         -----
-        Saves events as numpy arrays per subject in dataframe folder/subjects per event of interest.
+        Saves events and blinks samples as dataframes per subject in dataframe folder/subjects per event of interest.
         Rows = trials x kernel length
         """        
-        cols = ['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_zscore']
+        cols = ['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_nuisance', 'pupil_nuisance_psc']
         
         # loop through each type of event to lock events to...
         for t,time_locked in enumerate(self.time_locked):
             pupil_step_lim = self.pupil_step_lim[t]
             TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols)   
-            TS = TS.loc[:,['index',pupil_dv]] # don't need all columns            
+            
+            # check where blinks were by comparing raw to interpolated time series. Identical values indicate NO interpolation was performed at that timepoint.
+            TS['blink'] = TS['pupil']!= TS['pupil_interp'] 
+            
+            TS = TS.loc[:,['index', pupil_dv, 'blink']] # don't need all columns            
             # get indices of phases with respect to full time series (add 1 because always one cell before event)
             phases = pd.read_csv(os.path.join(self.project_directory, '{}_phases.csv'.format(self.alias)))
             phase_idx = np.array(phases[phases['msg'].str.contains(self.phases[t])]['index'])+1
@@ -907,18 +1002,29 @@ class trials(object):
             c = int((pupil_step_lim[1]-pupil_step_lim[0])*self.sample_rate)
             SAVE_TRIALS = np.zeros((r,c))
             SAVE_TRIALS[SAVE_TRIALS==0] = np.nan # better than zeros for missing data
+            # blinks
+            SAVE_BLINKS = np.zeros((r,c))
+            SAVE_BLINKS[SAVE_BLINKS==0] = np.nan # better than zeros for missing data
             # phase_idx refers to original index, not absolute row/position of pupil
             for trial,t_idx in enumerate(phase_idx):
                 this_row = TS[TS['index'] == t_idx].index.tolist()[0]
                 # gets one extra sample, cut off at end
                 this_pupil = TS.loc[int(this_row+(pupil_step_lim[0]*self.sample_rate)):int(this_row+(pupil_step_lim[1]*self.sample_rate))-1,pupil_dv]                    
                 this_pupil = np.array(this_pupil)
-                SAVE_TRIALS[trial,:len(this_pupil)] = this_pupil # sometimes not enough data at the end
+                SAVE_TRIALS[trial,:len(this_pupil)] = this_pupil # sometimes not enough data at the end          
+                
+                # check for blinks      
+                this_blink = TS.loc[int(this_row+(pupil_step_lim[0]*self.sample_rate)):int(this_row+(pupil_step_lim[1]*self.sample_rate))-1,'blink'] 
+                SAVE_BLINKS[trial,:len(this_pupil)] = this_blink
+                
             # save as CSV file
             pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
             SAVE_TRIALS = pd.DataFrame(SAVE_TRIALS)
+            SAVE_BLINKS = pd.DataFrame(SAVE_BLINKS)
             
             SAVE_TRIALS.to_csv(os.path.join(self.project_directory, '{}_{}_evoked.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            SAVE_BLINKS.to_csv(os.path.join(self.project_directory, '{}_{}_evoked_blinks.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            
             print('subject {}, {} events extracted'.format(self.subject, time_locked))
         print('sucess: event_related_subjects')
     
@@ -957,3 +1063,249 @@ class trials(object):
             B.to_csv(baselines_file, float_format='%.16f')
             print('subject {}, {} events baseline corrected'.format(self.subject, time_locked))
         print('sucess: event_related_baseline_correction')
+        
+        
+    def event_related_subjects_raw_bp(self,pupil_dv):
+        """Cut out time series of pupil data locked to time points of interest within the given kernel: RAW and BP filtered time series.
+            
+        Parameters
+            ----------
+        pupil_dv : string
+            The pupil time series to be processed (e.g., 'pupil_psc')
+            
+        Notes
+        -----
+        Saves events per subject in dataframe folder/subjects per event of interest.
+        Rows = trials x kernel length
+        """        
+        cols = ['index', 'pupil', 'pupil_bp', 'pupil_psc']
+        
+        # loop through each type of event to lock events to...
+        for t,time_locked in enumerate(self.time_locked):
+            pupil_step_lim = self.pupil_step_lim[t]
+            TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}_raw_bp.npy'.format(self.alias))), columns=cols)   
+            TS = TS.loc[:,['index',pupil_dv]] # don't need all columns            
+            # get indices of phases with respect to full time series (add 1 because always one cell before event)
+            phases = pd.read_csv(os.path.join(self.project_directory, '{}_phases.csv'.format(self.alias)))
+            phase_idx = np.array(phases[phases['msg'].str.contains(self.phases[t])]['index'])+1
+            #print('phases[t]:' + str(np.array(phases[phases['msg'].str.contains(self.phases[t])]['index'])))
+            
+            # loop through trials, cut out events
+            r = len(phase_idx) # number of trials
+            c = int((pupil_step_lim[1]-pupil_step_lim[0])*self.sample_rate)
+            SAVE_TRIALS = np.zeros((r,c))
+            SAVE_TRIALS[SAVE_TRIALS==0] = np.nan # better than zeros for missing data
+            # phase_idx refers to original index, not absolute row/position of pupil
+            for trial,t_idx in enumerate(phase_idx):
+                this_row = TS[TS['index'] == t_idx].index.tolist()[0]
+                # gets one extra sample, cut off at end
+                this_pupil = TS.loc[int(this_row+(pupil_step_lim[0]*self.sample_rate)):int(this_row+(pupil_step_lim[1]*self.sample_rate))-1,pupil_dv]                    
+                this_pupil = np.array(this_pupil)
+                SAVE_TRIALS[trial,:len(this_pupil)] = this_pupil # sometimes not enough data at the end
+            # save as CSV file
+            pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
+            SAVE_TRIALS = pd.DataFrame(SAVE_TRIALS)
+            
+            SAVE_TRIALS.to_csv(os.path.join(self.project_directory, '{}_{}_raw_bp_evoked.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            print('subject {}, {} events extracted'.format(self.subject, time_locked))
+        print('sucess: event_related_subjects RAW BP')
+    
+    
+    def event_related_baseline_correction_raw_bp(self):
+        """Baseline correction on evoked responses, per trial: RAW and BP filtered time series.
+        
+        Notes
+        -----
+        Saves baseline pupil in behavioral log file.
+        """                 
+        # loop through each type of event to lock events to...
+        for t,time_locked in enumerate(self.time_locked):
+            pupil_step_lim = self.pupil_step_lim[t]
+            P = pd.read_csv(os.path.join(self.project_directory, '{}_{}_raw_bp_evoked.csv'.format(self.alias, time_locked)))
+            P.drop(['Unnamed: 0'],axis=1,inplace=True)
+            P = np.array(P)
+            baselines_file = os.path.join(self.project_directory, '{}_{}_raw_bp_baselines.csv'.format(self.alias, time_locked))  # save baseline pupils
+            SAVE_TRIALS = []
+            for trial in range(len(P)):
+                event_idx = int(abs(pupil_step_lim[0]*self.sample_rate))
+                base_start = int(event_idx - (self.baseline_window*self.sample_rate))
+                base_end = int(base_start + (self.baseline_window*self.sample_rate))
+                # mean within baseline window
+                this_base = np.mean(P[trial,base_start:base_end]) 
+                SAVE_TRIALS.append(this_base)
+                # remove baseline mean from each time point
+                P[trial] = P[trial]-this_base
+            # save baseline corrected events and baseline means too!
+            P = pd.DataFrame(P)
+            
+            P.to_csv(os.path.join(self.project_directory, '{}_{}_raw_bp_evoked_basecorr.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            
+            B = pd.DataFrame()
+            B['pupil_baseline_' + time_locked] = np.array(SAVE_TRIALS) #was pupil_b
+            B.to_csv(baselines_file, float_format='%.16f')
+            print('subject {}, {} events baseline corrected'.format(self.subject, time_locked))
+        print('sucess: event_related_baseline_correction RAW BP')
+        
+    
+    def event_related_subjects_interp_bp(self,pupil_dv):
+        """Cut out time series of pupil data locked to time points of interest within the given kernel: INTERPOLATED and BP filtered time series.
+            
+        Parameters
+            ----------
+        pupil_dv : string
+            The pupil time series to be processed (e.g., 'pupil_psc')
+            
+        Notes
+        -----
+        Saves events per subject in dataframe folder/subjects per event of interest.
+        Rows = trials x kernel length
+        """        
+        cols = ['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_psc']
+        
+        # loop through each type of event to lock events to...
+        for t,time_locked in enumerate(self.time_locked):
+            pupil_step_lim = self.pupil_step_lim[t]
+            TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}_interp_bp.npy'.format(self.alias))), columns=cols)   
+            TS = TS.loc[:,['index',pupil_dv]] # don't need all columns            
+            # get indices of phases with respect to full time series (add 1 because always one cell before event)
+            phases = pd.read_csv(os.path.join(self.project_directory, '{}_phases.csv'.format(self.alias)))
+            phase_idx = np.array(phases[phases['msg'].str.contains(self.phases[t])]['index'])+1
+            #print('phases[t]:' + str(np.array(phases[phases['msg'].str.contains(self.phases[t])]['index'])))
+            
+            # loop through trials, cut out events
+            r = len(phase_idx) # number of trials
+            c = int((pupil_step_lim[1]-pupil_step_lim[0])*self.sample_rate)
+            SAVE_TRIALS = np.zeros((r,c))
+            SAVE_TRIALS[SAVE_TRIALS==0] = np.nan # better than zeros for missing data
+            # phase_idx refers to original index, not absolute row/position of pupil
+            for trial,t_idx in enumerate(phase_idx):
+                this_row = TS[TS['index'] == t_idx].index.tolist()[0]
+                # gets one extra sample, cut off at end
+                this_pupil = TS.loc[int(this_row+(pupil_step_lim[0]*self.sample_rate)):int(this_row+(pupil_step_lim[1]*self.sample_rate))-1,pupil_dv]                    
+                this_pupil = np.array(this_pupil)
+                SAVE_TRIALS[trial,:len(this_pupil)] = this_pupil # sometimes not enough data at the end
+            # save as CSV file
+            pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
+            SAVE_TRIALS = pd.DataFrame(SAVE_TRIALS)
+            
+            SAVE_TRIALS.to_csv(os.path.join(self.project_directory, '{}_{}_interp_bp_evoked.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            print('subject {}, {} events extracted'.format(self.subject, time_locked))
+        print('sucess: event_related_subjects INTERP BP')
+    
+    
+    def event_related_baseline_correction_interp_bp(self):
+        """Baseline correction on evoked responses, per trial: INTERPOLATED and BP filtered time series.
+        
+        Notes
+        -----
+        Saves baseline pupil in behavioral log file.
+        """                 
+        # loop through each type of event to lock events to...
+        for t,time_locked in enumerate(self.time_locked):
+            pupil_step_lim = self.pupil_step_lim[t]
+            P = pd.read_csv(os.path.join(self.project_directory, '{}_{}_interp_bp_evoked.csv'.format(self.alias, time_locked)))
+            P.drop(['Unnamed: 0'],axis=1,inplace=True)
+            P = np.array(P)
+            baselines_file = os.path.join(self.project_directory, '{}_{}_interp_bp_baselines.csv'.format(self.alias, time_locked))  # save baseline pupils
+            SAVE_TRIALS = []
+            for trial in range(len(P)):
+                event_idx = int(abs(pupil_step_lim[0]*self.sample_rate))
+                base_start = int(event_idx - (self.baseline_window*self.sample_rate))
+                base_end = int(base_start + (self.baseline_window*self.sample_rate))
+                # mean within baseline window
+                this_base = np.mean(P[trial,base_start:base_end]) 
+                SAVE_TRIALS.append(this_base)
+                # remove baseline mean from each time point
+                P[trial] = P[trial]-this_base
+            # save baseline corrected events and baseline means too!
+            P = pd.DataFrame(P)
+            
+            P.to_csv(os.path.join(self.project_directory, '{}_{}_interp_bp_evoked_basecorr.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            
+            B = pd.DataFrame()
+            B['pupil_baseline_' + time_locked] = np.array(SAVE_TRIALS) #was pupil_b
+            B.to_csv(baselines_file, float_format='%.16f')
+            print('subject {}, {} events baseline corrected'.format(self.subject, time_locked))
+        print('sucess: event_related_baseline_correction INTERP BP')
+        
+        
+    def event_related_subjects_nuisance(self, pupil_dv):
+        """Cut out time series of pupil data locked to time points of interest within the given kernel: NUISANCE time series.
+            
+        Parameters
+            ----------
+        pupil_dv : string
+            The pupil time series to be processed (e.g., 'pupil_psc')
+            
+        Notes
+        -----
+        Saves events as numpy arrays per subject in dataframe folder/subjects per event of interest.
+        Rows = trials x kernel length
+        """        
+        cols = ['index', 'pupil', 'pupil_interp', 'pupil_bp', 'pupil_clean', 'pupil_psc', 'pupil_nuisance', 'pupil_nuisance_psc']
+        
+        # loop through each type of event to lock events to...
+        for t,time_locked in enumerate(self.time_locked):
+            pupil_step_lim = self.pupil_step_lim[t]
+            TS = pd.DataFrame(np.load(os.path.join(self.project_directory, '{}.npy'.format(self.alias))), columns=cols)  # saved in the main preprocessing pipeline
+            TS = TS.loc[:,['index', pupil_dv]] # don't need all columns            
+            # get indices of phases with respect to full time series (add 1 because always one cell before event)
+            phases = pd.read_csv(os.path.join(self.project_directory, '{}_phases.csv'.format(self.alias)))
+            phase_idx = np.array(phases[phases['msg'].str.contains(self.phases[t])]['index'])+1
+            #print('phases[t]:' + str(np.array(phases[phases['msg'].str.contains(self.phases[t])]['index'])))
+            
+            # loop through trials, cut out events
+            r = len(phase_idx) # number of trials
+            c = int((pupil_step_lim[1]-pupil_step_lim[0])*self.sample_rate)
+            SAVE_TRIALS = np.zeros((r,c))
+            SAVE_TRIALS[SAVE_TRIALS==0] = np.nan # better than zeros for missing data
+            # phase_idx refers to original index, not absolute row/position of pupil
+            for trial,t_idx in enumerate(phase_idx):
+                this_row = TS[TS['index'] == t_idx].index.tolist()[0]
+                # gets one extra sample, cut off at end
+                this_pupil = TS.loc[int(this_row+(pupil_step_lim[0]*self.sample_rate)):int(this_row+(pupil_step_lim[1]*self.sample_rate))-1,pupil_dv]                    
+                this_pupil = np.array(this_pupil)
+                SAVE_TRIALS[trial,:len(this_pupil)] = this_pupil # sometimes not enough data at the end
+            # save as CSV file
+            pd.set_option('display.float_format', lambda x: '%.16f' % x) # suppress scientific notation in pandas
+            SAVE_TRIALS = pd.DataFrame(SAVE_TRIALS)
+            
+            SAVE_TRIALS.to_csv(os.path.join(self.project_directory, '{}_{}_nuisance_evoked.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            print('subject {}, {} events extracted'.format(self.subject, time_locked))
+        print('sucess: event_related_subjects NUISANCE')
+    
+    
+    def event_related_baseline_correction_nuisance(self):
+        """Baseline correction on evoked responses, per trial: NUISANCE time series.
+        
+        Notes
+        -----
+        Saves baseline pupil in behavioral log file.
+        """                 
+        # loop through each type of event to lock events to...
+        for t,time_locked in enumerate(self.time_locked):
+            pupil_step_lim = self.pupil_step_lim[t]
+            P = pd.read_csv(os.path.join(self.project_directory, '{}_{}_nuisance_evoked.csv'.format(self.alias, time_locked)))
+            P.drop(['Unnamed: 0'],axis=1,inplace=True)
+            P = np.array(P)
+            baselines_file = os.path.join(self.project_directory, '{}_{}_nuisance_baselines.csv'.format(self.alias, time_locked))  # save baseline pupils
+            SAVE_TRIALS = []
+            for trial in range(len(P)):
+                event_idx = int(abs(pupil_step_lim[0]*self.sample_rate))
+                base_start = int(event_idx - (self.baseline_window*self.sample_rate))
+                base_end = int(base_start + (self.baseline_window*self.sample_rate))
+                # mean within baseline window
+                this_base = np.mean(P[trial,base_start:base_end]) 
+                SAVE_TRIALS.append(this_base)
+                # remove baseline mean from each time point
+                P[trial] = P[trial]-this_base
+            # save baseline corrected events and baseline means too!
+            P = pd.DataFrame(P)
+            
+            P.to_csv(os.path.join(self.project_directory, '{}_{}_nuisance_evoked_basecorr.csv'.format(self.alias, time_locked)), float_format='%.16f')
+            
+            B = pd.DataFrame()
+            B['pupil_baseline_' + time_locked] = np.array(SAVE_TRIALS) #was pupil_b
+            B.to_csv(baselines_file, float_format='%.16f')
+            print('subject {}, {} events baseline corrected'.format(self.subject, time_locked))
+        print('sucess: event_related_baseline_correction NUISANCE')

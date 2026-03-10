@@ -201,27 +201,27 @@ if higher_level:
     
     ''' Note: the functions after this are using: task-letter_color_visual_decision_subjects.csv
     '''
-    higherLevel.average_conditions()           # group level data frames for all main effects + interaction
-    higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
-    higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
-    higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
+    # higherLevel.average_conditions()           # group level data frames for all main effects + interaction
+    # higherLevel.plot_phasic_pupil_pe()         # plots the interaction between the frequency and accuracy
+    # higherLevel.plot_behavior()                # simple bar plots of accuracy and RT per mapping condition
+    # higherLevel.individual_differences()       # individual differences correlation between behavior and pupil
     
     ''' Evoked pupil response
     '''
-    higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
+    # higherLevel.dataframe_evoked_pupil_higher()  # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    # higherLevel.plot_evoked_pupil()              # plots evoked pupil per event of interest, group level, main effects + interaction
     
     ''' Ideal learner model
     '''
-    higherLevel.information_theory_estimates(flat_prior=False) # compute the Shannon surprise, entropy, and KL divergence per trial for each subject, add to subjects' dataframe
-    higherLevel.average_information_conditions()    # average model parameters across conditions of interest
-    higherLevel.plot_information()                  # plot the model parameters as a function of task conditions
+    # higherLevel.information_theory_estimates(flat_prior=False) # compute the Shannon surprise, entropy, and KL divergence per trial for each subject, add to subjects' dataframe
+    # higherLevel.average_information_conditions()    # average model parameters across conditions of interest
+    # higherLevel.plot_information()                  # plot the model parameters as a function of task conditions
     
     ''' Ideal learner model fits
     '''
-    higherLevel.pupil_information_correlation_matrix()      # plot the correlation between the model parameters
-    higherLevel.dataframe_evoked_correlation()              # compute the correlation of pupil to model parameters for each timepoint of evoked response
-    higherLevel.plot_pupil_information_regression_evoked()  # plot the correlation between pupil to model parameters for each timepoint of evoked response
+    # higherLevel.pupil_information_correlation_matrix()      # plot the correlation between the model parameters
+    # higherLevel.dataframe_evoked_correlation()              # compute the correlation of pupil to model parameters for each timepoint of evoked response
+    # higherLevel.plot_pupil_information_regression_evoked()  # plot the correlation between pupil to model parameters for each timepoint of evoked response
     
     ''' Supplementary analysis: Ideal learner model with uniform prior distribution
     '''
@@ -230,19 +230,19 @@ if higher_level:
     higherLevel.plot_information()
     higherLevel.pupil_information_correlation_matrix()
     higherLevel.dataframe_evoked_correlation()
-    higherLevel.plot_pupil_information_regression_evoked()
+    higherLevel.plot_pupil_information_correlation_evoked()
 
     ''' Supplementary analysis: Sanity checks on pupil pre-processing
     '''
-    higherLevel.dataframe_evoked_pupil_higher_raw_bp()      # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.dataframe_evoked_pupil_higher_interp_bp()   # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.dataframe_evoked_pupil_higher_nuisance()    # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
-    higherLevel.plot_evoked_pupil_raw_bp()                  # plots evoked pupil per event of interest, group level, main effects + interaction
-    higherLevel.plot_evoked_pupil_interp_bp()               # plots evoked pupil per event of interest, group level, main effects + interaction
-    higherLevel.plot_evoked_pupil_nuisance()                # plots evoked pupil per event of interest, group level, main effects + interaction
-    higherLevel.compute_phasics_interp_bp()                 # compute the average feedback response in the time windows of interest (INTERP BP timeseries)
-    higherLevel.correlation_interp_clean()                  # check the correlation in the phasic pupil averages between the clean and "unclean" data
-    higherLevel.group_r2_deconvolution()                     # average r2 from preprocessing deconvolution
+    # higherLevel.dataframe_evoked_pupil_higher_raw_bp()      # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    # higherLevel.dataframe_evoked_pupil_higher_interp_bp()   # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    # higherLevel.dataframe_evoked_pupil_higher_nuisance()    # per event of interest, outputs one dataframe or np.array? for all trials for all subject on pupil time series
+    # higherLevel.plot_evoked_pupil_raw_bp()                  # plots evoked pupil per event of interest, group level, main effects + interaction
+    # higherLevel.plot_evoked_pupil_interp_bp()               # plots evoked pupil per event of interest, group level, main effects + interaction
+    # higherLevel.plot_evoked_pupil_nuisance()                # plots evoked pupil per event of interest, group level, main effects + interaction
+    # higherLevel.compute_phasics_interp_bp()                 # compute the average feedback response in the time windows of interest (INTERP BP timeseries)
+    # higherLevel.correlation_interp_clean()                  # check the correlation in the phasic pupil averages between the clean and "unclean" data
+    # higherLevel.group_r2_deconvolution()                    # average r2 from preprocessing deconvolution
     
     
     

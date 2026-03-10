@@ -1704,8 +1704,8 @@ class higherLevel(object):
         print('success: dataframe_evoked_regression')
 
 
-    def plot_pupil_information_regression_evoked(self):
-        """Plot partial correlation between pupil response and model estimates.
+    def plot_pupil_information_correlation_evoked(self):
+        """Plot correlation between pupil response and model estimates.
         
         Notes
         -----
@@ -1722,7 +1722,7 @@ class higherLevel(object):
         alphas = [1]
         
         #######################
-        # FEEDBACK PLOT BETAS FOR EACH MODEL DV
+        # FEEDBACK PLOT STATS FOR EACH MODEL DV
         #######################
         fig = plt.figure(figsize=(4,2))
         ax = fig.add_subplot(111)

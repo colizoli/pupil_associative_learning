@@ -1710,7 +1710,7 @@ class higherLevel(object):
         Notes
         -----
         Always feed_locked pupil response.
-        Partial correlations are done for all trials as well as for correct and error trials separately.
+        Correlations are done for all trials as well as for correct and error trials separately.
         """
         ylim_feed = [-0.2, 0.2]
         tick_spacer = 0.1
